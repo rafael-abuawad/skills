@@ -122,6 +122,14 @@ boa.deal(usdc, alice, 1_000 * 10 ** 6)
 assert usdc.balanceOf(alice) == 1_000 * 10 ** 6
 ```
 
+### Time and Block Manipulation
+
+```python
+boa.env.time_travel(seconds=86400)   # advance 1 day
+boa.env.time_travel(blocks=100)      # advance 100 blocks
+boa.env.time_travel(seconds=3600, blocks=10)  # both at once
+```
+
 ## Accessing Private Members
 
 Boa exposes contract internals for white-box testing:
@@ -377,9 +385,78 @@ test_burn_exceeds_balance_reverts
 
 Prefer one logical assertion per test for clear failure messages. Multiple related asserts (e.g. sender and receiver balances after transfer) in one test are acceptable when they verify a single operation.
 
+## Forge-to-Titanoboa Cheatsheet
+
+Quick reference for developers migrating from Foundry/Forge. See the full guide in [Forge Analogues](https://titanoboa.readthedocs.io/en/latest/guides/forge/).
+
+| Forge (Solidity) | Titanoboa (Python) |
+|---|---|
+| `forge test` | `pytest tests/` |
+| `forge test --match-test testFoo` | `pytest tests/test_file.py::test_foo` |
+| `new MyContract()` | `boa.load("MyContract.vy")` |
+| `new MyContract{value: 1 ether}(a, b)` | `boa.load("MyContract.vy", a, b, value=10**18)` |
+| `vm.prank(alice)` | `with boa.env.prank(alice):` |
+| `vm.deal(alice, 100 ether)` | `boa.env.set_balance(alice, 100 * 10**18)` |
+| `vm.warp(block.timestamp + 1 days)` | `boa.env.time_travel(seconds=86400)` |
+| `vm.roll(block.number + 100)` | `boa.env.time_travel(blocks=100)` |
+| `vm.expectRevert("msg")` | `with boa.reverts("msg"):` |
+| `vm.store(addr, slot, val)` | `boa.env.set_storage(addr, slot, val)` |
+| `vm.load(addr, slot)` | `boa.env.get_storage(addr, slot)` |
+| `vm.snapshot()` / `vm.revertTo(id)` | `with boa.env.anchor():` |
+| `vm.expectEmit(...)` | `logs = contract.get_logs()` |
+| `forge test --gas-report` | `pytest tests/ --gas-profile` |
+| `console.log("val:", x)` | `print("val:", x)` in Vyper source |
+| `contract MockToken is ERC20 {...}` | `boa.loads("""...""")` inline Vyper mock |
+| `vm.assume(cond)` | `@given(x=st.integers().filter(cond))` (Hypothesis) |
+| `vm.startBroadcast()` | `boa.set_network_env(url)` + `boa.env.add_account(acct)` |
+| `forge verify-contract ...` | `boa.verify(contract, etherscan_api_key=KEY)` |
+| `forge test --fork-url URL` | `with boa.fork(URL):` |
+
+### Creating Mock Contracts
+
+```python
+mock_token = boa.loads("""
+balances: HashMap[address, uint256]
+totalSupply: uint256
+
+@external
+def mint(to: address, amount: uint256):
+    self.balances[to] += amount
+    self.totalSupply += amount
+
+@external
+@view
+def balanceOf(account: address) -> uint256:
+    return self.balances[account]
+""")
+```
+
+### Script Deployment
+
+```python
+import boa
+from eth_account import Account
+
+boa.set_network_env("https://eth-sepolia.g.alchemy.com/v2/KEY")
+account = Account.from_key("0x...")
+boa.env.add_account(account)
+
+contract = boa.load("MyContract.vy")
+print(f"Deployed at: {contract.address}")
+```
+
+### Contract Verification
+
+```python
+boa.verify(contract, etherscan_api_key="YOUR_KEY")
+
+boa.set_verifier("etherscan", api_key="YOUR_KEY")
+```
+
 ## Additional Resources
 
 - For extended API reference and advanced patterns, see [reference.md](reference.md)
+- [Forge Analogues (Titanoboa)](https://titanoboa.readthedocs.io/en/latest/guides/forge/)
 - [Titanoboa docs](https://titanoboa.readthedocs.io/)
 - [Moccasin testing docs](https://cyfrin.github.io/moccasin/core_concepts/testing/)
 - [Vyper docs](https://docs.vyperlang.org/)

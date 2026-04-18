@@ -29,6 +29,9 @@ with boa.env.prank(addr):
 | Method | Description |
 |--------|-------------|
 | `boa.env.anchor()` | Context manager: snapshot state, rollback on exit |
+| `boa.env.time_travel(seconds=N)` | Advance block timestamp by N seconds |
+| `boa.env.time_travel(blocks=N)` | Advance block number by N blocks |
+| `boa.env.time_travel(seconds=N, blocks=M)` | Advance both timestamp and block number |
 | `boa.env.get_storage(addr, slot)` | Read raw storage slot |
 | `boa.env.set_storage(addr, slot, value)` | Write raw storage slot (use with caution) |
 | `boa.env.get_code(addr)` | Get deployed bytecode |
@@ -397,4 +400,49 @@ def test_auction_lifecycle(auction, seller, bidder1, bidder2):
         auction.finalize(item_id=1)
 
     assert auction.winner(1) == bidder2
+```
+
+## Deployment and Verification
+
+### Network Deployment
+
+```python
+import boa
+from eth_account import Account
+
+boa.set_network_env("https://eth-sepolia.g.alchemy.com/v2/KEY")
+
+account = Account.from_key("0x...")
+boa.env.add_account(account)
+
+contract = boa.load("src/MyContract.vy", arg1, arg2)
+print(f"Deployed at: {contract.address}")
+```
+
+### Contract Verification
+
+| Method | Description |
+|--------|-------------|
+| `boa.verify(contract, etherscan_api_key=KEY)` | Verify a single deployed contract on Etherscan |
+| `boa.set_verifier("etherscan", api_key=KEY)` | Set a global verifier so all subsequent deploys are auto-verified |
+
+### Mock Contracts (inline Vyper)
+
+Use `boa.loads()` to create lightweight mocks without separate `.vy` files:
+
+```python
+mock_token = boa.loads("""
+balances: HashMap[address, uint256]
+totalSupply: uint256
+
+@external
+def mint(to: address, amount: uint256):
+    self.balances[to] += amount
+    self.totalSupply += amount
+
+@external
+@view
+def balanceOf(account: address) -> uint256:
+    return self.balances[account]
+""")
 ```

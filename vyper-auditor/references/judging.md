@@ -1,33 +1,72 @@
 # Finding Validation
 
-Each finding passes a false-positive gate, then gets a confidence score (how certain you are it is real).
+Every finding passes four sequential gates. Fail any gate → **rejected** or **demoted** to lead. Later gates are not evaluated for failed findings.
 
-## FP Gate
+## Gate 1 — Refutation
 
-Every finding must pass all three checks. If any check fails, drop the finding — do not score or report it.
+Construct the strongest argument that the finding is wrong. Find the guard, check, or constraint that kills the attack — quote the exact line and trace how it blocks the claimed step.
 
-1. You can trace a concrete attack path: caller → function call → state change → loss/impact. Evaluate what the code _allows_, not what the deployer _might choose_.
-2. The entry point is reachable by the attacker (check decorators / function-level guards — e.g. `@nonreentrant("...")`, explicit `msg.sender` checks; map Solidity "modifier" thinking to Vyper patterns — `msg.sender` guards, role checks, etc.).
-3. No existing guard already prevents the attack (`require`, `if`-revert, reentrancy lock, allowance check, etc.).
+- Concrete refutation (specific guard blocks exact claimed step) → **REJECTED** (or **DEMOTE** if code smell remains)
+- Speculative refutation ("probably wouldn't happen") → **clears**, continue
 
-## Confidence Score
+Vyper-specific guards to check:
 
-Confidence measures certainty that the finding is real and exploitable — not how severe it is. Every finding that passes the FP gate starts at **100**.
+- `@nonreentrant("...")` (≤0.3.x) or `@nonreentrant` (0.4+) on the entry point — but verify it covers ALL paths, not just one of two `@external` functions writing the same state
+- `assert msg.sender == ...` inline guards or snekmate `ownable._check_owner()` / `access_control._check_role(...)`
+- `default_return_value=convert(1, bytes32)` on `raw_call` — does the consumer of the returned value validate it independently?
+- `convert(x, uintN)` reverts on overflow — if the result is then `unsafe_*`'d it loses the protection
 
-**Deductions (apply all that fit):**
+## Gate 2 — Reachability
 
-- Privileged caller required (owner, admin, multisig, governance) → **-25**.
-- Attack path is partial (general idea is sound but cannot write exact caller → call → state change → outcome) → **-20**.
-- Impact is self-contained (only affects the attacker's own funds, no spillover to other users) → **-15**.
+Prove the vulnerable state exists in a live deployment.
 
-Confidence indicator: `[score]` (e.g., `[95]`, `[75]`, `[60]`).
+- Structurally impossible (enforced invariant prevents it) → **REJECTED**
+- Requires privileged actions outside normal operation → **DEMOTE**
+- Achievable through normal usage or common token behaviors (fee-on-transfer, rebasing, blacklisting, pausing) → **clears**, continue
 
-Findings below the confidence threshold (default 75) are still included in the report table but do not get a **Fix** section — description only.
+## Gate 3 — Trigger
+
+Prove an unprivileged actor executes the attack.
+
+- Only trusted roles can trigger → **DEMOTE**
+- Costs exceed extraction → **REJECTED**
+- Unprivileged actor triggers profitably → **clears**, continue
+
+## Gate 4 — Impact
+
+Prove material harm to an identifiable victim.
+
+- Self-harm only → **REJECTED**
+- Dust-level, no compounding → **DEMOTE**
+- Material loss to identifiable victim → **CONFIRMED**
+
+## Confidence
+
+Start at **100**, deduct: partial attack path **-20**, bounded non-compounding impact **-15**, requires specific (but achievable) state **-10**. Confidence ≥ 80 gets description + fix. Below 80 gets description only.
+
+## Safe patterns (do not flag)
+
+- Vyper >= 0.3 reverts on overflow/underflow by default — do not flag plain `+`/`-`/`*` as "missing SafeMath"
+- `unsafe_*` used inside a provably-bounded loop counter (e.g., `for i in range(n): self.x = unsafe_add(self.x, 1)` with `n <= type-max`)
+- Explicit `convert(x, smallerType)` (reverts on overflow)
+- MINIMUM_LIQUIDITY burn on first deposit
+- `@nonreentrant` correctly applied to all relevant entry points
+- Two-step admin transfer (snekmate `Ownable2Step`)
+- Consistent protocol-favoring rounding unless compounding or zero-rounding
+- `raw_call(..., default_return_value=...)` where the called token is hardcoded immutable and known-compliant
+
+## Lead promotion
+
+Before finalizing leads, promote where warranted:
+
+- **Cross-contract echo.** Same root cause confirmed as FINDING in one contract → promote in every contract where the identical pattern appears.
+- **Multi-agent convergence.** 2+ agents flagged same area, lead was demoted (not rejected) → promote to FINDING at confidence 75.
+- **Partial-path completion.** Only weakness is incomplete trace but path is reachable and unguarded → promote to FINDING at confidence 75, description only.
+
+## Leads
+
+High-signal trails for manual investigation. No confidence score, no fix — title, code smells, and what remains unverified.
 
 ## Do Not Report
 
-- Anything a linter, compiler, or seasoned developer would dismiss — INFO-level notes, gas micro-optimizations, naming, NatSpec, redundant comments.
-- Owner/admin can set fees, parameters, or pause — these are by-design privileges, not vulnerabilities.
-- Missing event emissions or insufficient logging.
-- Centralization observations without a concrete exploit path (e.g., "owner could rug" with no specific mechanism beyond trust assumptions).
-- Theoretical issues requiring implausible preconditions (e.g., compromised compiler, corrupt block producer, >50% token supply held by attacker). Note: common ERC20 behaviors (fee-on-transfer, rebasing, blacklisting, pausing) are NOT implausible — if the code accepts arbitrary tokens, these are valid attack surfaces.
+Linter/compiler issues, gas micro-opts, naming, NatSpec. Admin privileges by design. Missing events. Centralization without exploit path. Bounded `for x in range(N)` loops where `N` is a small constant. Implausible preconditions (but fee-on-transfer, rebasing, blacklisting ARE plausible for contracts accepting arbitrary tokens).
