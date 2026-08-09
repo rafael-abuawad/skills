@@ -1,72 +1,145 @@
 # Finding Validation
 
-Every finding passes four sequential gates. Fail any gate → **rejected** or **demoted** to lead. Later gates are not evaluated for failed findings.
+Every candidate passes four gates in order. Fail a gate: reject it or demote it to
+a lead, then do not evaluate later gates. These gates test whether the claimed
+attack actually reaches material harm — not whether the code appears unusual.
 
-## Gate 1 — Refutation
+Before Gate 1, apply the compiler-context rule from `vyper-language.md`: a
+compiler-specific claim requires a deployed or reproducibly configured affected
+Vyper version. Unknown version means a lead, not a finding.
 
-Construct the strongest argument that the finding is wrong. Find the guard, check, or constraint that kills the attack — quote the exact line and trace how it blocks the claimed step.
+## Gate 1 — Attack execution
 
-- Concrete refutation (specific guard blocks exact claimed step) → **REJECTED** (or **DEMOTE** if code smell remains)
-- Speculative refutation ("probably wouldn't happen") → **clears**, continue
+Trace the claimed path from the caller to harm. Read every `assert`, branch,
+decorator, module boundary, `exports:` entry, external-call result check, and
+constraint on that exact path.
 
-Vyper-specific guards to check:
+- A concrete source-level interruption blocks the claimed exploit before harm
+  (quote it and explain the trace) → **REJECTED**, or **DEMOTED** if a distinct
+  code smell remains.
+- An assumed interruption (“the token is probably standard”, “the owner would not
+  do that”, “the UI prevents it”) → clears this gate.
 
-- `@nonreentrant("...")` (≤0.3.x) or `@nonreentrant` (0.4+) on the entry point — but verify it covers ALL paths, not just one of two `@external` functions writing the same state
-- `assert msg.sender == ...` inline guards or snekmate `ownable._check_owner()` / `access_control._check_role(...)`
-- `default_return_value=convert(1, bytes32)` on `raw_call` — does the consumer of the returned value validate it independently?
-- `convert(x, uintN)` reverts on overflow — if the result is then `unsafe_*`'d it loses the protection
+Vyper-specific checks:
+
+- For `<0.4.0`, map every `@nonreentrant("key")` involved; a different key is not
+  a guard. For `>=0.4.0`, map global `@nonreentrant`, and for `>=0.4.2` determine
+  whether `# pragma nonreentrancy on` covers the **current file** and whether
+  `@reentrant`/`reentrant(T)` opts out. Imported module files have independent
+  settings.
+- Verify inline authority checks, snekmate module checks, module initialization,
+  and exported entry points on the actual route.
+- For `extcall`, verify a boolean transfer result is asserted. If
+  `default_return_value=True` is used, verify it is an intentional no-return-token
+  policy, code-existence is not skipped without reason, and the defaulted result is
+  asserted before accounting.
+- For `raw_call`, verify the claimed route handles `revert_on_failure=False`
+  success flags, response length, decode validity, and delegatecall storage
+  context. `default_return_value` is not a raw-call option.
+- For a claimed arithmetic wrap, distinguish ordinary checked arithmetic,
+  bounds-checked `convert`, and `unsafe_*`/`pow_mod256`. A normal checked operation
+  stops extraction, though a reachable critical revert may be a separate DoS lead.
 
 ## Gate 2 — Reachability
 
-Prove the vulnerable state exists in a live deployment.
+Prove that the vulnerable state can exist in a deployed system.
 
-- Structurally impossible (enforced invariant prevents it) → **REJECTED**
-- Requires privileged actions outside normal operation → **DEMOTE**
-- Achievable through normal usage or common token behaviors (fee-on-transfer, rebasing, blacklisting, pausing) → **clears**, continue
+- An enforced invariant, compiler version outside the affected range, or impossible
+  module/factory state → **REJECTED**.
+- It requires a privileged action outside normal operation → **DEMOTED**, subject
+  to the admin-action rule below.
+- It follows from normal use or realistic asset behavior — fee-on-transfer,
+  rebase, blacklist/pause, false/no-return tokens, ERC-777/NFT callbacks, stale or
+  manipulable oracles, and cross-chain delay — clears this gate.
 
 ## Gate 3 — Trigger
 
-Prove an unprivileged actor executes the attack.
+Prove that an unprivileged actor can execute the attack and, where relevant, that
+the economics are viable.
 
-- Only trusted roles can trigger → **DEMOTE**
-- Costs exceed extraction → **REJECTED**
-- Unprivileged actor triggers profitably → **clears**, continue
+- Only a trusted role can trigger it → **DEMOTED**.
+- Cost exceeds attainable extraction and there is no material griefing/lock impact
+  → **REJECTED**.
+- An unprivileged actor triggers it profitably or can materially lock/impair others
+  → clears this gate.
+
+### Admin-action findings
+
+This rule applies only when harm depends on an admin acting maliciously or against
+documented intent. Reject it — do not emit a lead — unless the finding names a
+concrete unprivileged amplifier:
+
+- **race:** an admin update creates a window a user can exploit;
+- **retroactive sweep:** an update rewrites a pending user value;
+- **asymmetric formula:** an admin-controlled value feeds a formula a user can
+  exploit; or
+- **access gap:** the authority/initialization mechanism itself is broken.
+
+With an amplifier, judge the unprivileged path normally. This rule does not excuse
+missing access control exploitable by an unprivileged caller.
 
 ## Gate 4 — Impact
 
-Prove material harm to an identifiable victim.
+Prove material harm to an identifiable victim or protocol property.
 
-- Self-harm only → **REJECTED**
-- Dust-level, no compounding → **DEMOTE**
-- Material loss to identifiable victim → **CONFIRMED**
+- Self-harm only → **REJECTED**.
+- Dust-level, bounded, non-compounding harm → **DEMOTED**.
+- Material loss, fund lock, insolvency, unauthorized control, or sustained
+  protocol-wide liveness loss → **CONFIRMED**.
 
 ## Confidence
 
-Start at **100**, deduct: partial attack path **-20**, bounded non-compounding impact **-15**, requires specific (but achievable) state **-10**. Confidence ≥ 80 gets description + fix. Below 80 gets description only.
+Start at **100**. Deduct:
 
-## Safe patterns (do not flag)
+- partial attack path: **-20**;
+- bounded, non-compounding impact: **-15**;
+- specific but achievable state: **-10**;
+- compiler/deployment configuration not directly verified: **-20** (and prefer a
+  lead when it is the sole proof).
 
-- Vyper >= 0.3 reverts on overflow/underflow by default — do not flag plain `+`/`-`/`*` as "missing SafeMath"
-- `unsafe_*` used inside a provably-bounded loop counter (e.g., `for i in range(n): self.x = unsafe_add(self.x, 1)` with `n <= type-max`)
-- Explicit `convert(x, smallerType)` (reverts on overflow)
-- MINIMUM_LIQUIDITY burn on first deposit
-- `@nonreentrant` correctly applied to all relevant entry points
-- Two-step admin transfer (snekmate `Ownable2Step`)
-- Consistent protocol-favoring rounding unless compounding or zero-rounding
-- `raw_call(..., default_return_value=...)` where the called token is hardcoded immutable and known-compliant
+Confidence **≥80** gets a description and a verified fix. Lower-confidence findings
+get a description only. Never use a confidence score to conceal a missing exploit
+step.
+
+## Safe patterns — do not flag by themselves
+
+- Ordinary Vyper arithmetic that reverts on overflow/underflow.
+- Bounds-checked `convert(x, smaller_type)`.
+- `unsafe_*` used only in a provably bounded operation where the full range proves
+  no wrap.
+- Correctly applied global nonreentrancy across all relevant current-file entry
+  points, after checking module/file boundaries and read-only paths.
+- An asserted interface-call result with a deliberate `default_return_value=True`
+  policy for a known no-return token, without unsafe `skip_contract_check`.
+- A `raw_call` to a hardcoded, immutable, known-compliant target whose success and
+  expected response are fully validated.
+- Minimum-liquidity protection against first-deposit inflation.
+- Two-step administrator transfer, consistent protocol-favouring rounding that
+  cannot compound, a small compile-time loop bound, and an intended administrative
+  capability without an unprivileged amplifier.
 
 ## Lead promotion
 
-Before finalizing leads, promote where warranted:
+Before final output, promote a lead when warranted:
 
-- **Cross-contract echo.** Same root cause confirmed as FINDING in one contract → promote in every contract where the identical pattern appears.
-- **Multi-agent convergence.** 2+ agents flagged same area, lead was demoted (not rejected) → promote to FINDING at confidence 75.
-- **Partial-path completion.** Only weakness is incomplete trace but path is reachable and unguarded → promote to FINDING at confidence 75, description only.
+- **Cross-contract echo:** the identical root cause is confirmed as a finding in
+  one contract and appears in another reachable contract.
+- **Multi-agent convergence:** two or more agents independently demoted (not
+  rejected) the same issue; promote at confidence 75.
+- **Partial-path completion:** the sole missing link has been completed from source
+  and the route is reachable and unguarded; promote at confidence 75.
 
 ## Leads
 
-High-signal trails for manual investigation. No confidence score, no fix — title, code smells, and what remains unverified.
+A lead is a high-signal manual-investigation trail. It has no confidence score or
+fix: include title, contract/function, code smell, the precise missing fact, and
+what must be checked next.
 
-## Do Not Report
+## Do not report
 
-Linter/compiler issues, gas micro-opts, naming, NatSpec. Admin privileges by design. Missing events. Centralization without exploit path. Bounded `for x in range(N)` loops where `N` is a small constant. Implausible preconditions (but fee-on-transfer, rebasing, blacklisting ARE plausible for contracts accepting arbitrary tokens).
+Do not report linter/compiler warnings without a proven affected compiler and
+material exploit, gas micro-optimizations, naming/NatSpec issues, missing events,
+centralization without an exploit path, expected admin authority, or implausible
+preconditions. Do not dismiss realistic arbitrary-token behavior — fee-on-transfer,
+rebasing, blacklist/pause, false/no-return values, callback tokens, and stale
+oracles are plausible unless the code restricts them.

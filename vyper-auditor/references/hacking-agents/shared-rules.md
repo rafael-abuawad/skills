@@ -1,64 +1,87 @@
 # Shared Scan Rules
 
-## Reading
+## Bundle contents and reading discipline
 
-Your bundle has two sections:
+Your bundle concatenates: all in-scope source, the senior-auditor SOP,
+Vyper-language semantics, your specialty, and these rules. Read it fully once
+before producing results. The bundle is the initial source of truth; do not
+re-read in-scope files for the initial pass.
 
-1. **Core source** (inline) — read in parallel chunks (offset + limit), compute offsets from the line count in your prompt.
-2. **Peripheral file manifest** — file paths under `# Peripheral Files (read on demand)`. Read only those relevant to your specialty.
+You may make targeted reads only to investigate a plausible cross-file path or to
+obtain necessary context from out-of-scope interfaces, imported dependencies,
+deployment/configuration files, or tests. Do not use a missing test, deployment
+intent, or a likely configuration as proof that a concrete code path is safe.
 
-When matching function names, check both `function_name` and `_function_name` (Vyper internal-function convention), and special-name dunder functions (`__init__`, `__default__`).
+Function names are Vyper snake_case. Check `function_name`, `_function_name`,
+public getters, module exports, and `__init__` / `__default__` explicitly. For each
+file, record its Vyper pragma and nonreentrancy setting before relying on a language
+property; see `vyper-language.md`.
 
-## Vyper language mapping
+## Mandatory mental-tool markers
 
-Attack-vector descriptions and patterns may name Solidity constructs. Map them to the equivalent Vyper surface:
+The senior-auditor tools are not optional. When a trigger fires while reading source,
+emit the required marker in your working text before continuing. Do **not** place
+these markers inside a FINDING or LEAD block; they are evidence of review depth.
 
-- `modifier` / `onlyOwner` → function-level guards (`assert msg.sender == self.owner`, role-mapping checks, snekmate `Ownable` / `AccessControl` modules)
-- `nonReentrant` → `@nonreentrant("...")` (≤0.3.x, single-key) or `@nonreentrant` (0.4+, single global lock)
-- `unchecked { ... }` → `unsafe_add` / `unsafe_sub` / `unsafe_mul` / `unsafe_div` / `pow_mod256`
-- `delegatecall` → `raw_call(target, data, is_delegate_call=True)`
-- `staticcall` → `raw_call(target, data, is_static_call=True)`
-- `abi.encodePacked` → `concat(...)`
-- `abi.encode` / `abi.decode` → `_abi_encode(...)` / `_abi_decode(data, type)`
-- `address(0)` → `empty(address)`
-- `type(uint256).max` → `max_value(uint256)`
-- `keccak256(abi.encodePacked(...))` → `keccak256(concat(...))`
-- `selfdestruct` → does not exist in Vyper 0.4+. Older versions could call it via `raw_call`; flag if found.
-- `new Foo(...)` / clones → `create_minimal_proxy_to`, `create_from_blueprint`, `create_copy_of`
-- `IERC20(token).transfer(...)` returning bool → in Vyper, callers must check the bool explicitly OR use `raw_call` with `default_return_value=True` (which masks empty returns); both shapes are exploitable when misused
-- `external` / `internal` / `view` / `pure` / `payable` → matching `@external` / `@internal` / `@view` / `@pure` / `@payable` decorators
-- Modules — `uses:`, `initializes:`, `exports:` (Vyper 0.4+) replace inheritance / `using ... for ...`
+| Trigger | Required marker | Content |
+| --- | --- | --- |
+| You open a contract, module, or function | `[Feynman: <name>]` | Explain it in plain language. Identify the first assumption that cannot be explained without Vyper jargon. |
+| A line's purpose or assumption is not immediately clear | `[Socratic: <file:line> — why?]` | Ask the question that reaches the implicit belief, not a restatement of the code. |
+| A path or guard looks clean or sufficient | `[Inversion: <function>]` | Give three concrete attacker moves: caller, values, state, callback, or ordering. |
 
-## Cross-contract patterns
+Triggers are mandatory. Extra markers are welcome. Markers prove reasoning depth,
+not report volume.
 
-When you find a bug in one contract, **weaponize that pattern across every other contract in the bundle.** Search by function name AND by code pattern. Finding native/ERC20 confusion in `ContractA.on_revert` means you check every other contract's `on_revert` — missing a repeat instance is an audit failure.
+## Cross-contract propagation
 
-After scanning: escalate every finding to its worst exploitable variant (DoS may hide fund theft). Then revisit every function where you found something and attack the other branches.
+When one instance of a root cause is found, search every in-scope contract and
+first-party module for the code pattern and semantic equivalent. A fee-on-transfer
+accounting bug, a missing `extcall` result assertion, a raw-call response decoder,
+or an unprotected exported module function rarely appears exactly once.
+
+Escalate every candidate to its worst demonstrated variant. A DoS may mask a fund
+lock, a state inconsistency may unlock a withdrawal, and a local reentrancy issue
+may be cross-contract. Then return to every affected function and attack its other
+branches.
 
 ## Do not report
 
-Admin-only functions doing admin things. Standard DeFi tradeoffs (MEV, rounding dust, first-depositor with `MINIMUM_LIQUIDITY`). Self-harm-only bugs. "Admin can rug" without a concrete mechanism. Vyper-style notes: bounded `for x in range(N)` loops are NOT a DoS finding by themselves.
+Do not report admin-only operations performing their documented administrative role,
+standard DeFi tradeoffs (ordinary MEV, bounded rounding dust, a first-depositor
+tradeoff already mitigated by minimum liquidity), self-harm-only behavior, missing
+events, naming/style/NatSpec issues, compiler/linter warnings, or a fixed small
+Vyper loop by itself. A compiler advisory is reportable only if the deployed or
+reproducibly configured Vyper version is affected and the affected construct reaches
+material impact.
 
 ## Output
 
-Return structured blocks only — no preamble, no narration. Exception: vector scan agent outputs its classification block first.
+Return structured blocks only after your mental-tool markers. Do not add a prose
+summary.
 
-FINDINGs have concrete, unguarded, exploitable attack paths. LEADs have real code smells with partial paths — default to LEAD over dropping.
+A **FINDING** has a complete, unguarded, materially harmful attack path. A **LEAD**
+has a concrete code smell and partial path, but some necessary fact is unverified.
+Default to a lead rather than dropping a valuable trail or inflating confidence.
 
-**Every FINDING must have a `proof:` field** — concrete values, traces, or state sequences from the actual code. No proof = LEAD, no exceptions.
-
-**One vulnerability per item.** Same root cause = one item. Different fixes needed = separate items.
+Every FINDING needs a `proof:` field containing actual source citations, concrete
+numbers, or a state/call trace. No proof means LEAD. One vulnerability per item;
+different fixes are different items even when they are in the same function.
 
 ```
-FINDING | contract: Name | function: func | bug_class: kebab-tag | group_key: Contract | function | bug-class
-path: caller → function → state change → impact
-proof: concrete values/trace demonstrating the bug
+FINDING | contract: Name | function: function_name | bug_class: kebab-tag | group_key: Contract | function_name | bug-class
+path: caller → entry point → state change / external interaction → impact
+proof: concrete values, exact trace, or quoted source demonstrating the exploit
+compiler_context: relevant pragma / deployment version when language-version behavior matters
 description: one sentence
-fix: one-sentence suggestion
+fix: one-sentence safe minimal suggestion
 
-LEAD | contract: Name | function: func | bug_class: kebab-tag | group_key: Contract | function | bug-class
-code_smells: what you found
-description: one sentence explaining trail and what remains unverified
+LEAD | contract: Name | function: function_name | bug_class: kebab-tag | group_key: Contract | function_name | bug-class
+code_smells: precise suspicious code or missing invariant
+unverified: the exact precondition, deployment fact, or external behavior still needed
+compiler_context: relevant pragma / deployment version when language-version behavior matters
+description: one sentence explaining the trail
 ```
 
-The `group_key` enables deduplication: `ContractName | function_name | bug_class`. Agents may add custom fields.
+Use `compiler_context` only for a version-sensitive claim. The `group_key` format is
+strict: `Contract | function_name | bug-class`. Agents may add specialty fields, but
+must retain all required fields.
