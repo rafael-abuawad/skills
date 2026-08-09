@@ -1,0 +1,57 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local agent/editor state
+.claude/local/
+.claude/settings.local.json
+.cursor/*.log
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/cache/
+.yarn/install-state.gz
+
+# JavaScript/TypeScript build and test output
+dist/
+build/
+out/
+.next/
+coverage/
+test-results/
+.nx/
+.turbo/
+*.tsbuildinfo
+
+# Python caches, environments, and test output
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.tox/
+htmlcov/
+.coverage*
+
+# Temporary files
+*.log
+tmp/
+temp/
+scratch/
