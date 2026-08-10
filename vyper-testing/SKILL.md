@@ -1,462 +1,155 @@
 ---
 name: vyper-testing
-description: >
-  Write, review, and generate advanced tests for Vyper smart contracts using Titanoboa (boa)
-  and Moccasin. Use when writing test files, creating fixtures, generating fuzz tests, setting
-  up gas profiling, computing coverage, testing blueprints/factories, or when the user asks
-  about boa testing patterns, hypothesis strategies, pranking, staging markers, or private
-  member access in Vyper contracts.
+description: Write Vyper smart contract tests with Titanoboa and Moccasin following Curve Finance patterns. Use when writing or extending tests for .vy contracts, mox test, pytest, native import from src, deploy_as_blueprint, tests/mocks, manifest_named, conftest fixtures, or when the user asks for Vyper test coverage.
 ---
 
-# Vyper Testing with Titanoboa & Moccasin
+# Vyper Testing (Titanoboa + Moccasin)
 
-## Quick Start
+Write Vyper contract tests using pytest + Titanoboa, following Curve Finance patterns. For Moccasin projects, prefer Vyper-native APIs (`from src import ...`, `deploy_as_blueprint`, named contracts) over raw `boa` calls.
 
-Apply this skill when:
+## Workflow
 
-- Writing or reviewing `test_*.py` files for Vyper contracts
-- Creating `conftest.py` fixtures for contract deployments
-- Generating fuzz tests, gas profiles, or coverage reports
-- Testing blueprint/factory patterns, access control, or token logic
+Copy this checklist and track progress:
 
-Conventions:
+```
+Task Progress:
+- [ ] Read contract under test (.vy), NatSpec, CONTEXT.md / architecture docs
+- [ ] Classify test type (unitary / integration / forked / fuzz)
+- [ ] Check existing conftest.py and deploy helpers — extend, don't duplicate
+- [ ] Add mocks to tests/mocks/ if needed (not inline boa.loads)
+- [ ] Write test(s) — one behavior per function, Curve-style sections
+- [ ] Run mox test (Moccasin) or pytest tests/ -v (raw Titanoboa)
+- [ ] Fix failures until green
+```
 
-- Tests live in `tests/`, shared fixtures in `tests/conftest.py`
-- Files named `test_<module>.py`; functions named `test_<function>_<scenario>_<expected>`
-- Use `import boa` as the primary testing runtime
+## Test directory layout
 
-## Core Testing Primitives
+| Directory | Purpose |
+|-----------|---------|
+| `tests/unitary/<contract>/` | Isolated function/behavior tests |
+| `tests/integration/` | Multi-contract flows |
+| `tests/forked/` | Mainnet fork tests |
+| `tests/fuzz/` | Hypothesis property tests |
+| `tests/mocks/` | Vyper mock contracts (`.vy`) + mock deployers |
+| `tests/utils/` | Production deployers, protocol helpers, constants |
+| `tests/conftest.py` | Shared pytest fixtures |
+| `script/mocks/` | Moccasin named-contract deploy scripts (optional) |
 
-### Loading Contracts
+## Naming conventions
+
+- Files: `test_<behavior>.py`
+- Functions: `test_<action>_<condition>`
+- Fixtures: domain role nouns (`controller`, `admin`, `collateral_token`) — not generic `alice`/`bob`
+
+## Moccasin vs raw Titanoboa
+
+**Moccasin project** (has `moccasin.toml`):
+- Import production contracts: `from src import factory, collection`
+- Run: `mox test` or `mox test -n auto`
+- Mocks outside `src/`: `boa.load_partial("tests/mocks/MockERC20.vy")`
+- See [moccasin-patterns.md](moccasin-patterns.md)
+
+**Raw Titanoboa project** (Curve-style):
+- Deployers: `boa.load_partial("path/Contract.vy")` in `tests/utils/deployers.py`
+- Run: `pytest tests/ -v`
+- See [curve-patterns.md](curve-patterns.md)
+
+## Quick patterns
+
+### Deploy (Moccasin)
 
 ```python
-# Native import (Moccasin projects — preferred)
-from src import my_contract
-from src.blueprints import token
+from src import collection, factory
+from moccasin.boa_tools import VyperContract
 
-contract = my_contract.deploy(arg1, arg2)
-
-# Direct load
-contract = boa.load("src/my_contract.vy", arg1, arg2)
-
-# From source string
-contract = boa.loads(source_code, arg1, arg2)
+blueprint: VyperContract = collection.deploy_as_blueprint()
+deployed: VyperContract = factory.deploy(blueprint.address)
+instance = collection.at(deployed_address)
 ```
 
-### Blueprints and Factories
+### Deploy (raw Titanoboa)
 
 ```python
-blueprint = token.deploy_as_blueprint()
-
-factory = factory_module.deploy(blueprint)
-
-child_addr = factory.create_child("Name", "SYM")
-child = token.at(child_addr)
+AMM_DEPLOYER = boa.load_partial("path/AMM.vy", compiler_args=compiler_args_codesize)
+contract = AMM_DEPLOYER.deploy(arg1, arg2)
+instance = AMM_DEPLOYER.at(deployed_address)
 ```
 
-### Identity and Pranking
+### Access control + revert
 
 ```python
-addr = boa.env.generate_address(alias="alice")
-boa.env.set_balance(addr, 10 ** 18)
-
-with boa.env.prank(addr):
-    contract.restricted_function()
+with boa.env.prank(unauthorized):
+    with boa.reverts("Only owner"):
+        contract.owner_function()
 ```
 
-### Expecting Reverts
+Or use `sender=` keyword: `contract.foo(sender=admin)`.
+
+### Events
 
 ```python
-# Match assert message
-with boa.reverts("insufficient balance"):
-    contract.transfer(to, amount)
-
-# Match vm_error (assert with message)
-with boa.reverts(vm_error="Not authorized"):
-    contract.admin_only()
-
-# Match compiler-level revert (e.g. underflow)
-with boa.reverts(compiler="safesub"):
-    contract.subtract(1, 2)
-
-# Match dev comment: `assert x  # dev: reason`
-with boa.reverts(dev="only owner"):
-    contract.set_owner(addr)
+contract.transfer(recipient, amount, sender=holder)
+logs = contract.get_logs()
+assert len(logs) == 1
+assert logs[0].event_type.name == "Transfer"
+assert logs[0].args.receiver == recipient
 ```
 
-### State Snapshots
-
-`boa.env.anchor()` snapshots VM state and rolls back on exit:
+### Test body structure (Curve style)
 
 ```python
-with boa.env.anchor():
-    contract.mint(addr, 100)
-    assert contract.balanceOf(addr) == 100
-# state is reverted here
-assert contract.balanceOf(addr) == 0
+def test_create_loan(controller, collateral_token, amounts):
+    """Money Flow: collateral → AMM, debt → borrower."""
+    borrower = boa.env.eoa
+
+    # ================= Capture initial state =================
+    assert controller.n_loans() == 0
+
+    # ================= Setup =================
+    boa.deal(collateral_token, borrower, amounts["collateral"])
+
+    # ================= Execute =================
+    controller.create_loan(..., sender=borrower)
+
+    # ================= Verify state, logs, money flows =================
+    assert controller.loan_exists(borrower)
 ```
 
-### Evaluating Vyper In-Context
+## Mocks — `tests/mocks/`
+
+- Write mocks as `.vy` files in `tests/mocks/`
+- Export deployers from `tests/mocks/deployers.py`
+- Keep `tests/utils/deployers.py` for production contracts only
+- Avoid inline `boa.loads` except throwaway prototypes
+
+## Fixture scoping
 
 ```python
-# Standalone evaluation
-result = boa.eval("keccak256('hello')")
+boa.env.enable_fast_mode()  # top of conftest.py
 
-# Evaluate against a deployed contract's state
-contract.eval("self.some_variable")
-contract.eval("self._internal_var + 1")
+@pytest.fixture(scope="module")
+def controller(market, admin):
+    ...
 ```
 
-### Forking
+- `scope="module"` — expensive deployments (protocol, markets)
+- `scope="session"` — deployer constants
+- `@pytest.fixture(params=[...])` — parametrize decimals, market types
 
-```python
-with boa.fork("https://eth.llamarpc.com"):
-    usdc = ERC20.at("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
-    assert usdc.symbol() == "USDC"
-```
+## Foundry migration
 
-### Token Balance Manipulation
+If the user comes from Foundry, see [forge-analogues.md](forge-analogues.md) for cheatcode mappings.
 
-```python
-boa.deal(usdc, alice, 1_000 * 10 ** 6)
-assert usdc.balanceOf(alice) == 1_000 * 10 ** 6
-```
+## Additional resources
 
-### Time and Block Manipulation
+- [forge-analogues.md](forge-analogues.md) — Foundry → Titanoboa cheatcode map
+- [curve-patterns.md](curve-patterns.md) — Curve deployers, protocols, fixtures, helpers
+- [moccasin-patterns.md](moccasin-patterns.md) — native imports, named contracts, fork networks
+- [examples.md](examples.md) — copy-paste templates
 
-```python
-boa.env.time_travel(seconds=86400)   # advance 1 day
-boa.env.time_travel(blocks=100)      # advance 100 blocks
-boa.env.time_travel(seconds=3600, blocks=10)  # both at once
-```
+## External references
 
-## Accessing Private Members
-
-Boa exposes contract internals for white-box testing:
-
-```python
-# Internal functions
-contract.internal._compute_hash(data)
-
-# Private storage variables
-contract._storage.my_var.get()
-
-# Private immutables
-contract._immutables.MY_CONST
-
-# Module variables (Vyper 0.4+)
-contract.eval("imported_module.x")
-```
-
-## Fixtures (conftest.py)
-
-Structure fixtures in layers: accounts, roles, contracts, blueprints, factories.
-
-```python
-import pytest
-import boa
-from src import my_token
-from src.blueprints import nft
-
-
-@pytest.fixture(scope="session")
-def accounts():
-    accts = {}
-    for i in range(5):
-        addr = boa.env.generate_address(alias=f"user_{i}")
-        boa.env.set_balance(addr, 10 ** 18)
-        accts[f"user_{i}"] = addr
-    return accts
-
-
-@pytest.fixture
-def owner(accounts):
-    return accounts["user_0"]
-
-
-@pytest.fixture
-def user(accounts):
-    return accounts["user_1"]
-
-
-@pytest.fixture
-def token_contract(owner):
-    with boa.env.prank(owner):
-        return my_token.deploy("Token", "TKN", 18, 1_000_000, owner)
-
-
-@pytest.fixture
-def nft_blueprint():
-    return nft.deploy_as_blueprint()
-```
-
-Use `scope="session"` for expensive, read-only fixtures (accounts, blueprints). Use default function scope for contracts that tests mutate.
-
-Moccasin projects can also wrap deploy scripts:
-
-```python
-from script.deploy import deploy_feed
-
-@pytest.fixture(scope="session")
-def price_feed():
-    return deploy_feed()
-```
-
-## Fuzzing with Hypothesis
-
-Import strategies from `boa.test.strategies`:
-
-```python
-from boa.test import strategies as boa_st
-from hypothesis import given, settings
-
-
-@given(amount=boa_st.uint256().filter(lambda x: 0 < x < 10 ** 20))
-@settings(max_examples=200, deadline=None)
-def test_deposit_any_amount(token, user, amount):
-    with boa.env.prank(user):
-        token.deposit(value=amount)
-    assert token.balanceOf(user) >= amount
-```
-
-### Available Strategies
-
-| Strategy | Description |
-|----------|-------------|
-| `boa_st.address()` | Valid Ethereum address |
-| `boa_st.uint256()`, `uint128()`, `uint8()` | Unsigned integers within Vyper bounds |
-| `boa_st.int128()`, `int256()` | Signed integers |
-| `boa_st.bytes32()` | 32-byte values |
-| `boa_st.bytes_(max_size=N)` | Variable-length bytes |
-| `boa_st.string(max_size=N)` | Strings within Vyper limits |
-| `boa_st.bool_()` | Boolean |
-| `boa_st.decimal()` | Fixed-point decimal |
-| `boa_st.array(strategy, size)` | Fixed-size array |
-| `boa_st.dynamic_array(strategy, max_size=N)` | Dynamic array |
-
-### Filtering for Realistic Values
-
-```python
-realistic_amount = boa_st.uint256().filter(lambda x: 10 ** 16 <= x <= 10 ** 21)
-
-non_zero_addr = boa_st.address().filter(
-    lambda x: x != "0x0000000000000000000000000000000000000000"
-)
-```
-
-### Stateful Testing
-
-```python
-from hypothesis.stateful import RuleBasedStateMachine, rule, invariant
-
-
-class TokenStateMachine(RuleBasedStateMachine):
-    def __init__(self):
-        super().__init__()
-        self.token = boa.load("src/token.vy", "T", "T", 18, 0, boa.env.eoa)
-        self.balances = {}
-        self.total = 0
-
-    @rule(acct=boa_st.address(), amt=boa_st.uint256().filter(lambda x: x < 10 ** 20))
-    def mint(self, acct, amt):
-        self.token.mint(acct, amt)
-        self.balances[acct] = self.balances.get(acct, 0) + amt
-        self.total += amt
-
-    @invariant()
-    def supply_matches(self):
-        assert self.token.totalSupply() == self.total
-
-
-TestToken = TokenStateMachine.TestCase
-```
-
-## Gas Profiling
-
-### Per-Test Marker
-
-```python
-@pytest.mark.gas_profile
-def test_expensive_op(contract):
-    contract.batch_process(data)
-```
-
-### CLI (all tests)
-
-```bash
-pytest tests/ --gas-profile
-```
-
-Exclude specific tests with `@pytest.mark.ignore_gas_profiling`.
-
-### Programmatic
-
-```python
-boa.env.enable_gas_profiling()
-contract.operation()
-boa.env.reset_gas_metering_behavior()
-```
-
-Output includes two tables: **call profile** (per-function stats) and **line profile** (per-line gas within functions), each showing count, mean, median, stdev, min, max.
-
-## Coverage
-
-### Setup
-
-Add to `.coveragerc`:
-
-```ini
-[run]
-plugins = boa.coverage
-```
-
-### Run
-
-```bash
-pytest --cov= --cov-branch tests/
-
-# Moccasin shorthand
-mox test --coverage
-```
-
-Coverage does not work with fast mode enabled.
-
-## Moccasin-Specific Features
-
-### Staging Markers
-
-Run tests only on live networks:
-
-```python
-@pytest.mark.staging
-@pytest.mark.ignore_isolation
-def test_oracle_integration(price_feed):
-    assert price_feed.latestAnswer() > 0
-```
-
-- `mox test` runs only non-staging tests
-- `mox test --network sepolia` runs only `@pytest.mark.staging` tests
-- Add `@pytest.mark.local` to also run staging tests on local networks
-
-Networks with `live_or_staging = true` in `moccasin.toml` skip non-staging tests automatically.
-
-## Test Organization Best Practices
-
-### Structure
-
-Follow Arrange-Act-Assert:
-
-```python
-def test_transfer_updates_balances(token, owner, user):
-    # Arrange
-    initial = token.balanceOf(owner)
-    amount = 100
-
-    # Act
-    with boa.env.prank(owner):
-        token.transfer(user, amount)
-
-    # Assert
-    assert token.balanceOf(owner) == initial - amount
-    assert token.balanceOf(user) == amount
-```
-
-### Test Grouping
-
-Organize tests by category within each file:
-
-1. **Deployment / initial state** -- constructor values, default storage
-2. **Happy path** -- normal operations succeed
-3. **Access control** -- unauthorized callers revert
-4. **Edge cases / reverts** -- zero values, max values, overflow, underflow
-5. **Invariants / fuzzing** -- property-based tests at the bottom
-
-### Naming
-
-```
-test_<function>_<scenario>_<expected>
-
-test_transfer_zero_amount_reverts
-test_mint_by_owner_succeeds
-test_burn_exceeds_balance_reverts
-```
-
-### One Assertion Per Test
-
-Prefer one logical assertion per test for clear failure messages. Multiple related asserts (e.g. sender and receiver balances after transfer) in one test are acceptable when they verify a single operation.
-
-## Forge-to-Titanoboa Cheatsheet
-
-Quick reference for developers migrating from Foundry/Forge. See the full guide in [Forge Analogues](https://titanoboa.readthedocs.io/en/latest/guides/forge/).
-
-| Forge (Solidity) | Titanoboa (Python) |
-|---|---|
-| `forge test` | `pytest tests/` |
-| `forge test --match-test testFoo` | `pytest tests/test_file.py::test_foo` |
-| `new MyContract()` | `boa.load("MyContract.vy")` |
-| `new MyContract{value: 1 ether}(a, b)` | `boa.load("MyContract.vy", a, b, value=10**18)` |
-| `vm.prank(alice)` | `with boa.env.prank(alice):` |
-| `vm.deal(alice, 100 ether)` | `boa.env.set_balance(alice, 100 * 10**18)` |
-| `vm.warp(block.timestamp + 1 days)` | `boa.env.time_travel(seconds=86400)` |
-| `vm.roll(block.number + 100)` | `boa.env.time_travel(blocks=100)` |
-| `vm.expectRevert("msg")` | `with boa.reverts("msg"):` |
-| `vm.store(addr, slot, val)` | `boa.env.set_storage(addr, slot, val)` |
-| `vm.load(addr, slot)` | `boa.env.get_storage(addr, slot)` |
-| `vm.snapshot()` / `vm.revertTo(id)` | `with boa.env.anchor():` |
-| `vm.expectEmit(...)` | `logs = contract.get_logs()` |
-| `forge test --gas-report` | `pytest tests/ --gas-profile` |
-| `console.log("val:", x)` | `print("val:", x)` in Vyper source |
-| `contract MockToken is ERC20 {...}` | `boa.loads("""...""")` inline Vyper mock |
-| `vm.assume(cond)` | `@given(x=st.integers().filter(cond))` (Hypothesis) |
-| `vm.startBroadcast()` | `boa.set_network_env(url)` + `boa.env.add_account(acct)` |
-| `forge verify-contract ...` | `boa.verify(contract, etherscan_api_key=KEY)` |
-| `forge test --fork-url URL` | `with boa.fork(URL):` |
-
-### Creating Mock Contracts
-
-```python
-mock_token = boa.loads("""
-balances: HashMap[address, uint256]
-totalSupply: uint256
-
-@external
-def mint(to: address, amount: uint256):
-    self.balances[to] += amount
-    self.totalSupply += amount
-
-@external
-@view
-def balanceOf(account: address) -> uint256:
-    return self.balances[account]
-""")
-```
-
-### Script Deployment
-
-```python
-import boa
-from eth_account import Account
-
-boa.set_network_env("https://eth-sepolia.g.alchemy.com/v2/KEY")
-account = Account.from_key("0x...")
-boa.env.add_account(account)
-
-contract = boa.load("MyContract.vy")
-print(f"Deployed at: {contract.address}")
-```
-
-### Contract Verification
-
-```python
-boa.verify(contract, etherscan_api_key="YOUR_KEY")
-
-boa.set_verifier("etherscan", api_key="YOUR_KEY")
-```
-
-## Additional Resources
-
-- For extended API reference and advanced patterns, see [reference.md](reference.md)
-- [Forge Analogues (Titanoboa)](https://titanoboa.readthedocs.io/en/latest/guides/forge/)
-- [Titanoboa docs](https://titanoboa.readthedocs.io/)
-- [Moccasin testing docs](https://cyfrin.github.io/moccasin/core_concepts/testing/)
-- [Vyper docs](https://docs.vyperlang.org/)
+- [Titanoboa Forge analogues](https://titanoboa.readthedocs.io/en/latest/guides/forge/)
+- [Titanoboa native import syntax](https://titanoboa.readthedocs.io/en/latest/guides/scripting/native_import_syntax/)
+- [Moccasin testing](https://cyfrin.github.io/moccasin/core_concepts/testing.html)
+- [Curve curve-stablecoin tests](https://github.com/curvefi/curve-stablecoin/tree/master/tests)
