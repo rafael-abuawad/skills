@@ -1,248 +1,189 @@
 ---
 name: vyper-auditor
-description: Security audit of Vyper code while you develop. Trigger on "audit", "check this contract", "review for security", or "Vyper security review". Modes: default full-repository review or specific Vyper files.
+description: Security audit of Vyper contracts, modules, or specified .vy files. Use for audits, security reviews, loop mode, or repeated audit passes. Supports findings memory between scans and one combined report.
 ---
 
 # Smart Contract Security Audit (Vyper)
 
-You are the orchestrator of a parallelized smart-contract security audit for
-**Vyper** projects. You coordinate specialized attackers, validate only complete
-exploit paths, and produce a calibrated report. This is not a replacement for a
-professional audit.
+Coordinate twelve attack specialties, validate their evidence, and produce one
+report. Preserve compiler-version evidence and Vyper semantics throughout.
 
-## Mode selection
+## Modes and artifacts
 
-**Exclude pattern:** Skip `interfaces/`, `lib/`, `mocks/`, `test/`, and `tests/`
-directories, and files matching `*Test*.vy`, `*Mock*.vy`, or `*_test.vy`.
-Interfaces and dependencies are out of scope for findings, but agents may read them
-for context while tracing a finding.
+- **Default:** discover `.vy` files with Bash `find -type f`, through the prepare
+  helper below. Exclude dependencies/build output (`node_modules/`, `lib/`,
+  `artifacts/`, `cache/`, `out/`, `broadcast/`, `coverage/`, `typechain*/`,
+  `.venv/`, `venv/`, `__pycache__/`, `build/`, `dist/`), `.git/`, audit artifacts,
+  interfaces, mocks, `test/`, `tests/`, and `*Test*.vy`, `*Mock*.vy`, `*_test.vy`.
+  `script/`, `scripts/`, and `deploy/` remain in scope. Python deployment scripts
+  are context for a Vyper path; default discovery does not become a Python audit.
+- **Named files:** scan only explicitly named `.vy` files, including files under
+  excluded directories. Reject missing files; never silently broaden scope.
+  Agents may inspect imports, interfaces, tests, and deployment configuration as
+  context, without expanding finding scope.
+- **`--loop [N]`:** N passes, 1–10; a bare flag means 3. Explicit natural language
+  such as “audit this four times” also settles the count. “Loop mode” without a
+  count requires the picker below.
+- **`--memory`:** remember findings and leads between scans. Off unless requested
+  or the pass count exceeds 1.
+- **`--file-output`:** copy the assembled report to
+  `{project-name}-pashov-ai-vyper-audit-report-{stamp}.md` in the audited root.
+  It never regenerates the report.
 
-- **Default** (no arguments): review every in-scope `.vy` file. Discover files with
-  Bash `find`, not Glob.
-- **`$filename ...`**: review only the specified `.vy` file(s). Reject nonexistent
-  paths and do not silently broaden the scope.
+A **scan** is one invocation; a **run** is one pass of twelve specialties. Ledger
+`scans` counts invocations. `seen in k/N runs` counts successful run files in this
+scan. Never substitute one count for the other.
 
-**Flags**
+Every scan with source creates `.vyper-auditor/runs/{stamp}/scope.tsv`, completed
+`run-K.md` files, and `full-report.md`. A plain one-pass scan reads/writes no ledger,
+writes no `mem_` scope keys, and prints no memory/pass labels or pass summary.
+It still saves run artifacts. `--memory` with one pass enables memory alone.
+Temporary `.vyper-audit-*` bundles are removed at the end. Nothing else is written
+outside `.vyper-auditor/` unless `--file-output` is requested. Do not edit `.gitignore`;
+mention the directory in usage documentation so the runner can choose to ignore it.
 
-- `--file-output` (off by default): also write the final report to the path
-  specified in `{resolved_path}/report-formatting.md`. Never write a report unless
-  this flag was explicitly passed.
+## Turn 1 — Discover and settle the scan
 
-## Orchestration
+Print the banner below. Resolve this skill's own directory; `{resolved_path}` is
+its `references/` directory, not another auditor's similarly named references.
+`{helper}` is the sibling `scripts/scan.py`. It requires Bash, Python 3.10+, awk,
+and standard Unix utilities; verify availability before work. Missing runtime:
+stop with the missing command, without substituting a model-written report.
 
-### Turn 1 — Discover
+In parallel, read local `VERSION`, discover the runtime's agent tool, and fetch
+`https://raw.githubusercontent.com/pashov/skills/main/solidity-auditor/VERSION`
+with `curl -sf --max-time 10`. Warn only if both values parse as numbers and local
+is lower: “⚠️ The Vyper auditor is behind the Solidity-auditor coverage baseline.
+Please upgrade: https://github.com/pashov/skills”. Fetch failure is silent.
 
-Print the banner exactly as shown below. Then make these tool calls in parallel in
-one message:
+### Turn 1b — Model and pass picker
 
-1. Bash `find` for in-scope `.vy` files according to the selected mode.
-2. Glob for `**/references/hacking-agents/shared-rules.md`; derive the directory
-   two levels above it as `{resolved_path}`. It must resolve to this skill's
-   `references/` directory.
-3. ToolSearch for `Agent`.
-4. Read the local `VERSION` beside this `SKILL.md`.
-5. Bash `curl -sf https://raw.githubusercontent.com/pashov/skills/main/solidity-auditor/VERSION`.
-   This checks the Solidity auditor coverage baseline; there is no upstream
-   `vyper-auditor` directory to query.
-6. Bash `mktemp -d ./.vyper-audit-XXXXXX`; store the result as `{bundle_dir}`.
+Ask only unanswered questions. On Claude Code with model-selectable Agent calls,
+ask which family (`opus`, `sonnet`, `haiku`) to use; recommend the orchestrator's
+family. On other runtimes leave the model unset and inherit the runtime default.
+Do not ask a Claude-model question on a different runtime.
 
-If the baseline fetch succeeds and differs from the local version, print:
+If no explicit pass count arrived, ask using the runtime's question tool, together
+with the model question when applicable:
 
-`⚠️ The Vyper auditor is behind the current Solidity-auditor coverage baseline. Please upgrade for best security coverage. See https://github.com/pashov/skills`
+“How many passes should this audit run? Each pass covers all twelve specialties.
+Later passes see earlier findings and hunt new ground. You get one combined report.”
 
-If the fetch fails, continue silently. If no in-scope source files are found, say
-so, remove `{bundle_dir}`, and stop without spawning agents.
+Offer **3 passes (Recommended)**, **1 pass**, **5 passes**, allowing a custom count.
+Without a question tool print those choices with their literal pass counts and
+wait for an answer. Never start agents with an assumed count. Parse the first
+integer (or a clearly spelled-out number); outside 1–10, ask once more, then use
+1 on a second unusable answer. An explicitly dismissed optional picker means 1;
+an unanswered conversational question remains pending. Previously supplied invalid
+counts use the same validation. Bare `--loop` has already selected 3; ask nothing.
 
-### Turn 1b — Model selection (Claude Code only)
+Upstream measured about 15/45/75 minutes on a 2,228-line Solidity project using
+Opus. These are not Vyper benchmarks or promises. Cost and runtime grow with
+passes, source size, model, and concurrency limits.
 
-Perform this turn **only** when both `AskUserQuestion` and the `Agent` tool with a
-`model` parameter are available — i.e. Claude Code. On runtimes without both tools,
-skip this turn, leave `{agent_model}` unset, and continue to Turn 2. Do not replace
-this with a prose question or another mechanism.
+### Turn 1c — Freeze source and open state
 
-On Claude Code:
+Compute `{stamp}` once with `date +%Y%m%d-%H%M%S`; use it for every artifact.
+Create `{bundle_dir}` with `mktemp -d ./.vyper-audit-XXXXXX`. Run:
 
-1. Detect the orchestrator's model family from the system prompt (`opus`, `sonnet`,
-   or `haiku`), ignoring version digits.
-2. Ask exactly: `Which Claude model should the 12 audit agents use?`
-3. Offer three single-select options. Put the orchestrator's family first and mark
-   it `(Recommended)`; set each option's description to `latest`.
-4. Use these previews verbatim:
+```bash
+python3 "{helper}" prepare --root . --bundle "{bundle_dir}" --stamp "{stamp}" --passes {passes}
+```
 
-   ```
-   ┌──────────────────────────────────────────────────────────┐
-   │  opus  ·  highest reasoning  ·  most expensive           │
-   └──────────────────────────────────────────────────────────┘
-   ```
+Add `--memory` only when explicitly requested (multiple passes enable it anyway).
+For named mode append `--` and each individually shell-quoted path. Placeholders
+are values, not shell code; never interpolate untrusted source or finding text
+into commands. Use structured file writes or safely quoted arguments.
 
-   ```
-   ┌──────────────────────────────────────────────────────────┐
-   │  sonnet  ·  balanced reasoning  ·  mid cost              │
-   └──────────────────────────────────────────────────────────┘
-   ```
+The helper executes default `find`, validates explicit scope, freezes source and
+SHA, rejects normalized identity collisions, and returns the run directory.
+No files: remove this scan's bundle and stop without agents. Invalid ledger:
+print the path/error, remove the bundle, and stop without report or ledger writes.
+An existing stamp is an error; obtain a fresh stamp rather than overwrite a scan.
+Read [scan-state.md](references/scan-state.md) when memory is enabled or an identity
+is unclear. Its immutable snapshot and pruning rules are implemented by the helper.
 
-   ```
-   ┌──────────────────────────────────────────────────────────┐
-   │  haiku  ·  lowest reasoning  ·  cheapest                 │
-   └──────────────────────────────────────────────────────────┘
-   ```
+## Turn 2 — Prepare each pass
 
-Store the answer as `{agent_model}`. If unanswered, use the orchestrator's family.
+Read in parallel, once per scan:
 
-### Turn 2 — Prepare
+- [report-formatting.md](references/report-formatting.md): run blocks and report shape.
+- [judging.md](references/judging.md): gates, threshold, and promotion exceptions.
+- [agent-prompts.md](references/agent-prompts.md): prompts for the two agent groups.
+- [report-language.md](references/report-language.md): title/description wording.
 
-In one message, make parallel tool calls to read:
+Source is already frozen in `{bundle_dir}/source.md`; never rebuild it between
+passes. Review compiler configuration and append its evidence summary as the
+`compiler_context` key in the run directory's `scope.tsv`; use “not verified”
+where necessary. Scope is append-only `key<TAB>value`, last value wins. Strip
+embedded tabs/newlines from values. `files` is a JSON array written by the helper,
+so spaces in paths remain intact. Never write `mem_` keys on a plain scan.
 
-1. `{resolved_path}/report-formatting.md`
-2. `{resolved_path}/judging.md`
+Every pass, run `python3 "{helper}" known --bundle "{bundle_dir}"`. This reads no
+ledger with memory off. With memory on it uses the pruned pre-scan snapshot for
+pass 1 and the merged live ledger thereafter. It removes stale known-findings
+output and creates no file when there are no records.
 
-Then use one Bash command and `cat` (not shell variables or heredocs) to create the
-bundles. Do not place source code in agent prompts.
+Build all twelve bundles with shell `cat`, from files, in this order:
+`source.md` + `senior-auditor-sop.md` + `vyper-language.md` + specialty +
+`hacking-agents/shared-rules.md` + `report-language.md` + `known-findings.md`
+(only when the last file exists). References are under `{resolved_path}`.
 
-1. `{bundle_dir}/source.md` contains **all** in-scope `.vy` files. For each file,
-   add a `### <path>` heading followed by a fenced `vyper` code block. Preserve the
-   path relative to the repository root.
-2. Every agent bundle is `source.md` followed by the senior-auditor SOP,
-   Vyper-language reference, specialty, and shared rules:
-
-| Bundle | Specialty appended after the common files |
+| Agent | Specialty under `hacking-agents/` |
 | --- | --- |
-| `agent-1-bundle.md` | `hacking-agents/math-precision-agent.md` |
-| `agent-2-bundle.md` | `hacking-agents/access-control-agent.md` |
-| `agent-3-bundle.md` | `hacking-agents/economic-security-agent.md` |
-| `agent-4-bundle.md` | `hacking-agents/execution-trace-agent.md` |
-| `agent-5-bundle.md` | `hacking-agents/invariant-agent.md` |
-| `agent-6-bundle.md` | `hacking-agents/periphery-agent.md` |
-| `agent-7-bundle.md` | `hacking-agents/first-principles-agent.md` |
-| `agent-8-bundle.md` | `hacking-agents/asymmetry-agent.md` |
-| `agent-9-bundle.md` | `hacking-agents/boundary-agent.md` |
-| `agent-10-bundle.md` | `hacking-agents/numerical-gap-agent.md` |
-| `agent-11-bundle.md` | `hacking-agents/trust-gap-agent.md` |
-| `agent-12-bundle.md` | `hacking-agents/flow-gap-agent.md` |
+| 1 | `math-precision-agent.md` |
+| 2 | `access-control-agent.md` |
+| 3 | `economic-security-agent.md` |
+| 4 | `execution-trace-agent.md` |
+| 5 | `invariant-agent.md` |
+| 6 | `periphery-agent.md` |
+| 7 | `first-principles-agent.md` |
+| 8 | `asymmetry-agent.md` |
+| 9 | `boundary-agent.md` |
+| 10 | `numerical-gap-agent.md` |
+| 11 | `trust-gap-agent.md` |
+| 12 | `flow-gap-agent.md` |
 
-The common files, in this order, are:
+Print line counts for source and bundles. Keep source out of agent-call prompts.
 
-1. `{bundle_dir}/source.md`
-2. `{resolved_path}/senior-auditor-sop.md`
-3. `{resolved_path}/vyper-language.md`
-4. the specialty above
-5. `{resolved_path}/hacking-agents/shared-rules.md`
+## Turn 3 — Run the twelve specialties
 
-Print line counts for `source.md` and every agent bundle. The source bundle is the
-initial scan material; agents may use targeted Read/Grep only for relevant
-out-of-scope interfaces, dependencies, deployment/configuration files, or a
-cross-file investigation.
+Use the single-specialty template for agents 1–9 and gap-hunter template for
+10–12. Include each template's Vyper identity rules in every call. Include the
+known-findings paragraph only when that file was appended. The read-only rule is
+unconditional: agents never write tests, PoCs, notes, or any file in the audited
+repository, including temporary files they intend to delete.
 
-### Turn 3a — Spawn all 12 agents
+Launch background agents up to the runtime's available concurrency; queue the
+remaining specialties and launch them as slots become available. All twelve
+specialties are attempted once per pass. Pass a model only if the picker set one.
+Use completion notifications or the runtime's native wait primitive; do not poll
+or sleep. Read [dedup-and-assembly.md](references/dedup-and-assembly.md) while the
+first pass runs. It governs Turns 4 and 5.
 
-In one message, spawn all twelve agents as **parallel background** Agent calls
-(`run_in_background=true`). This is a single phase: do not spawn later batches,
-poll, or sleep. Wait for their completion notifications before proceeding.
+A failed agent is not retried. Record its specialty and loss in the run header's
+following prose and `pass_K_agents` scope key. Wait for every running agent and
+attempt every queued specialty before deduplication. Never overwrite bundles
+while any agent still reads them.
 
-- If Turn 1b set `{agent_model}`, pass it to every agent. Otherwise omit the
-  `model` parameter entirely; do not invent a default.
-- **Agents 1–9** use this single-specialty prompt with their real number and
-  line count:
+If a bundle build fails or all agents fail, append `pass_K_failed<TAB>1`, write no
+run file, stop the loop, and perform Turn 5. First-pass failure makes no ledger
+write; later failure retains earlier completed passes. The report must expose
+lost coverage even in a one-pass scan.
 
-  ```
-  You are an attacker. Your Vyper specialty, language rules, source, and output
-  rules are in your bundle. Read it fully before producing findings.
+## Turn 4 — Deduplicate, validate, record
 
-  Read first:
-  - {bundle_dir}/agent-N-bundle.md (XXXX lines) — source + senior SOP + Vyper
-    semantics + specialty + shared rules.
+Follow [dedup-and-assembly.md](references/dedup-and-assembly.md), Turn 4, once per
+completed pass. Write full evidence while the pass's context is available. Merge
+memory only when enabled. Then return to Turn 2 until the selected count is reached.
 
-  The bundle contains all in-scope source. Do NOT re-read in-scope files for the
-  initial scan. Use Read/Grep only for cross-file searches or out-of-scope context
-  (interfaces, dependencies, tests, deployment configuration).
+## Turn 5 — Assemble, print, clean
 
-  A FINDING needs: file, function, one code-level root cause, a minimal safe fix,
-  and concrete proof (numbers, trace, or quoted code). Without concrete proof,
-  emit a LEAD instead.
-
-  Do not skim. Do not trust your first read. Trust your discomfort.
-  Output format: see shared-rules.md inside your bundle.
-  ```
-
-- **Agents 10–12** use this gap-hunter prompt instead:
-
-  ```
-  You are an attacker. Your Vyper gap-hunter specialty, language rules, source,
-  and output rules are in your bundle. Read it fully before producing findings.
-
-  Read first:
-  - {bundle_dir}/agent-N-bundle.md (XXXX lines) — source + senior SOP + Vyper
-    semantics + gap-hunter specialty + shared rules.
-
-  The bundle contains all in-scope source. Do NOT re-read in-scope files for the
-  initial scan. Use Read/Grep only for cross-file searches or out-of-scope context
-  (interfaces, dependencies, tests, deployment configuration).
-
-  A FINDING needs: file, function, the seam between lenses, one code-level root
-  cause, a minimal safe fix, and concrete proof. Without concrete proof of the
-  seam, emit a LEAD instead.
-
-  Do not skim. Do not trust your first read. Trust your discomfort.
-  Output format: see shared-rules.md inside your bundle.
-  ```
-
-### Turn 3b — Wait
-
-Proceed only after all twelve background agents have sent completion notifications.
-Let agents finish naturally; do not poll or sleep.
-
-### Turn 4 — Deduplicate, validate, and output
-
-Perform this once, in order. Do not print an intermediate deduplication list.
-
-1. **Deduplicate.** Parse every `FINDING` and `LEAD`. Group exact `group_key`
-   matches first, then merge synonymous `bug_class` values only when contract and
-   function are identical. Never merge different functions. Keep the clearest,
-   best-evidenced version, number final findings sequentially, and annotate every
-   surviving item with `[agents: N]`.
-
-   - **Wide-description gate:** When reports with a shared group key describe
-     distinct mechanisms, attack paths, or fixes, retain every mechanism in the
-     merged item. Different vulnerabilities needing different fixes remain separate.
-   - **Function-level second pass:** For every final `(contract, function)` with
-     multiple reports, compare all descriptions, paths, proofs, and fixes. Every
-     distinct mechanism from a raw report must survive in at least one final item.
-   - **Fix-preservation gate:** Collect all raw fixes for the merged tuple. If their
-     added lines differ in called expression, check direction, or checked parameter,
-     show each as a separately labelled `Fix (Option A — …)`, `Fix (Option B — …)`
-     diff. Do not collapse alternatives into one invented fix.
-   - **Completeness gate:** Before report generation, ensure every unique raw
-     `(contract, function)` is represented by at least one final finding or lead.
-     Print: `Completeness: N unique (contract, function) in raw, N covered in final.`
-   - **Composite chains:** If finding A's output is B's precondition and their
-     combined impact is strictly worse than either alone, add `Chain: [A] + [B]` at
-     confidence `min(A, B)`. Most reviews have zero to two.
-
-2. **Gate evaluation.** Apply the four gates in `judging.md` to every deduplicated
-   candidate exactly once, in order. For each relevant path, evaluate once in this
-   fixed sequence where applicable: `__init__` → setters → deposit/swap → mint →
-   burn/withdraw → liquidation → `__default__`. Record a one-line verdict per path:
-   `BLOCKS`, `ALLOWS`, `IRRELEVANT`, or `UNCERTAIN`; treat `UNCERTAIN` as `ALLOWS`.
-   Commit after this pass; do not reopen a verdict.
-
-3. **Lead promotion and rejections.** Promote a lead to a confidence-75 finding
-   only when the full exploit chain is now traced in source or when two or more
-   agents independently demoted (not rejected) the same issue. Agreement never
-   overrules a concrete refutation. Judge code behaviour, not presumed deployer
-   intent.
-
-4. **Verify fixes for confidence ≥80.** Trace the attack after applying the fix;
-   verify that it introduces no denial of service, reentrancy path, or broken
-   invariant. For Vyper ERC-20 calls, preserve code-existence and success semantics:
-   use an asserted `extcall` result (with `default_return_value=True` only when
-   supporting no-return tokens is intended), or fully validate a `raw_call` response.
-   List every repeated location. If no safe minimal fix exists, state that instead of
-   proposing a dangerous patch.
-
-5. **Format, print, clean.** Follow `report-formatting.md`, exclude rejected items,
-   and write a report only with `--file-output`. Then always remove `{bundle_dir}`.
-   It is transient build state; copy it elsewhere before rerunning if debugging is
-   needed.
+Follow [dedup-and-assembly.md](references/dedup-and-assembly.md), Turn 5, once.
+The shell assembler produces the report; the helper extracts terminal output and
+copies it when requested. Never regenerate, summarize, or silently truncate the
+assembled findings. Remove only this scan's temporary bundle, including on errors;
+retain run artifacts and the last complete ledger. Do not sweep other scan folders.
 
 ## Banner
 

@@ -1,123 +1,106 @@
-# Report Formatting
+# Report and run-file contract
 
-## Report path
+`assemble.sh` produces the report; `scripts/scan.py terminal` selects terminal
+output and makes an optional copy. The orchestrator writes run blocks, not a
+second report. The threshold comes from `judging.md`.
 
-Only with `--file-output`, save the report in the repository working directory as:
+## Run files
 
-`{project-name}-pashov-ai-vyper-audit-report-{timestamp}.md`
+Each completed pass writes `run-K.md` beginning with:
 
-`{project-name}` is the repository-root basename and `{timestamp}` is scan-time
-`YYYYMMDD-HHMMSS`. Print the written path after the terminal report. Do not write
-anything without the explicit flag.
+```markdown
+<!--RUN pass=1 agents=12/12-->
 
-## Output format
+Completeness: 2 unique (file, function) in raw, 2 covered in final, 0 rejected with reasons.
+```
+
+If agents fail, state their specialties immediately after the header. Write the
+same successful agent count to `pass_K_agents` in scope. Gates and rejected paths
+may be documented in this preamble, outside finding blocks.
+
+Use exactly these block layouts; the blank lines are part of the parser contract.
+Titles have no leading sequence number. The assembler numbers the final findings.
 
 ````markdown
-# 🔐 Security Review — <ContractName or repository name> (Vyper)
+<!--F key=src-vault-vy|withdraw|unchecked-transfer conf=95 kind=FINDING agents=1,6-->
 
----
+[95] **The vault ignores failed transfers**
 
-## Scope
-
-| | |
-| --- | --- |
-| **Mode** | default / filename |
-| **Files reviewed** | `File1.vy` · `File2.vy`<br>`File3.vy` · `File4.vy` | <!-- list every file, 3 per line --> |
-| **Compiler context** | <pragma(s), resolved deployment compiler if known, or `not verified`> |
-| **Confidence threshold (1-100)** | 80 |
-
----
-
-Completeness: N unique (contract, function) in raw, N covered in final.
-
-## Findings
-
-[95] **1. <Title>** [agents: 1, 6]
-
-`ContractName.function_name` · Confidence: 95
+`src/vault.vy.withdraw` · Confidence: 95
 
 **Description**
-<The vulnerable Vyper code pattern and why it is exploitable, in one short sentence.>
+A token can reject the transfer while the vault removes the user's shares.
 
 **Proof**
-<Concrete values, trace, and relevant source locations.>
+Concrete source locations, values, and a state/call trace. Include compiler
+configuration evidence whenever the claim depends on the compiler version.
 
 **Fix**
 
 ```diff
-- vulnerable line(s)
-+ fixed line(s)
+- extcall IERC20(token).transfer(receiver, amount)
++ assert extcall IERC20(token).transfer(receiver, amount)
 ```
 
----
+<!--/F-->
 
-[82] **2. <Title>** [agents: 2]
+<!--F key=src-vault-vy|deposit|token-behavior kind=LEAD agents=3-->
 
-`ContractName.__default__` · Confidence: 82
+- **The vault may overcredit deposits** — `src/vault.vy.deposit` — Code smells: accounting uses the requested amount — Unverified: whether the accepted token deducts transfer fees.
 
-**Description**
-<The vulnerable Vyper code pattern and why it is exploitable, in one short sentence.>
-
-**Proof**
-<Concrete values, trace, and relevant source locations.>
-
-**Fix**
-
-```diff
-- vulnerable line(s)
-+ fixed line(s)
-```
-
----
-
-[75] **3. <Title>** [agents: 4, 12]
-
-`ContractName.function_name` · Confidence: 75
-
-**Description**
-<The vulnerable Vyper code pattern and why it is exploitable, in one short sentence.>
-
-**Proof**
-<Concrete values, trace, and relevant source locations.>
-
----
-
-<All below-threshold findings have a description and proof, but no Fix block.>
-
----
-
-## Findings list
-
-| # | Confidence | Title |
-| --- | --- | --- |
-| 1 | [95] | <title> |
-| 2 | [82] | <title> |
-| | | **Below Confidence Threshold** |
-| 3 | [75] | <title> |
-
----
-
-## Leads
-
-_Vulnerability trails with a concrete code smell where the full exploit path could
-not be completed in this review. Leads are not false positives and are not scored._
-
-- **<Title>** — `ContractName.function_name` — Code smells: <specific code smell> — Unverified: <the exact missing deployment fact, call path, or external behavior> — <one or two sentence trail>
-
----
-
-> ⚠️ This review was performed by an AI assistant. AI analysis cannot verify the complete absence of vulnerabilities and no security guarantee is given. Team security reviews, bug-bounty programs, and on-chain monitoring are strongly recommended. For consultation, visit [https://www.pashov.com](https://www.pashov.com).
+<!--/F-->
 ````
 
-## Rules
+A finding always has Description and Proof. Below threshold, omit Fix. Also omit
+Fix for the explicit partial-path promotion exception; explain the unverified link
+in Proof. Preserve alternative fixes as separately labelled diff blocks. Fixes are
+verified suggestions, never applied to the audited source.
 
-- Follow the template exactly. Use Vyper snake_case function names and dunder names
-  (`__init__`, `__default__`) where relevant.
-- Sort findings by confidence descending and number sequentially. Findings below 80
-  omit the **Fix** block, not their proof.
-- Preserve `[agents: …]`, any `Chain: [A] + [B]` annotation, and every distinct
-  safe fix option from deduplication.
-- For version-sensitive findings, include the compiler evidence in **Proof**. If it
-  is unverified, the item is normally a lead.
-- Draft directly in this report format; do not first create an unstructured list and
-  then regenerate it.
+Each marker carries a normalized file|function|bug-class key. FINDING has an
+integer confidence 1–100; LEAD has no confidence attribute. `agents` is a comma-
+separated list of specialty numbers 1–12. The location retains source spelling
+and must normalize to the key's first two segments. Tabs are forbidden in titles,
+locations, and single-line leads; code/proof bodies may retain their formatting.
+Markers are whole lines outside code fences. See [scan-state.md](scan-state.md)
+for exact normalization and module/export attribution.
+
+## Assembled report
+
+The title is `Security Review — {project-name} (Vyper)`. Sections are Scope,
+Findings, Findings List (unless empty), Leads, optionally Known from earlier scans,
+and the disclaimer. Findings sort by confidence descending; all proofs and fix
+bodies are copied through without rewriting. Agent attribution stays visible.
+
+A plain Scope table contains Mode, Files reviewed, Compiler context, and Confidence
+threshold. It has no Passes or Memory row. A multi-pass scan adds planned/completed
+passes and failures. Memory adds the post-prune before count, after count, and frozen
+SHA. Missing/broken run records or lost coverage produce a warning even on one pass.
+A memory write failure also appears in Scope; it must not imply persistence succeeded.
+
+`scope.tsv` is append-only key<TAB>value, last line wins. `files` is a JSON array
+of complete paths, wrapped three per display line. Other values contain no literal
+tabs/newlines. The helper writes scan facts; the orchestrator appends compiler
+context, `pass_K_agents`, `pass_K_failed`, and errors as observed.
+
+Across runs, one write-up survives per key: FINDING before LEAD, then highest
+confidence, then later pass. Confidence is not increased by repetition. Preserve
+distinct mechanisms within each pass before this deterministic selection.
+`seen in k/N runs` counts unique run files raising the key and appears only when
+more than one run file exists. `KNOWN (n scans)` means present before this scan,
+with the stored count plus one; otherwise NEW. Memory labels appear only with
+memory enabled. Old records not raised again appear as explicitly not re-checked.
+
+Empty findings/leads are stated in words. No run file means “This scan reviewed
+nothing”; surviving agents that found nothing remain a valid completed run.
+
+## Output paths and size
+
+Every scan assembles `.vyper-auditor/runs/{stamp}/full-report.md`. With
+`--file-output`, copy those bytes to
+`{project-name}-pashov-ai-vyper-audit-report-{stamp}.md` in the audited root.
+
+At most 20 findings: print the report in full. More than 20: print scope unchanged,
+`Findings List — top 3 of F`, three mechanically extracted rows, one full-report
+path, and the disclaimer. Use the copy path when requested, otherwise the internal
+path. Leads do not trigger abbreviation. No unlabeled truncation, rewritten
+finding bodies, or confidence-bucket summaries.

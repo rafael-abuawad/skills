@@ -97,8 +97,8 @@ Start at **100**. Deduct:
 - compiler/deployment configuration not directly verified: **-20** (and prefer a
   lead when it is the sole proof).
 
-Confidence **≥80** gets a description and a verified fix. Lower-confidence findings
-get a description only. Never use a confidence score to conceal a missing exploit
+Confidence **≥75** gets a description and a verified fix. Lower-confidence findings
+get a description and proof only. The report threshold is **75**. Never use a confidence score to conceal a missing exploit
 step.
 
 ## Safe patterns — do not flag by themselves
@@ -123,11 +123,17 @@ step.
 Before final output, promote a lead when warranted:
 
 - **Cross-contract echo:** the identical root cause is confirmed as a finding in
-  one contract and appears in another reachable contract.
+  one contract and appears in another reachable contract; promote at confidence 75.
 - **Multi-agent convergence:** two or more agents independently demoted (not
   rejected) the same issue; promote at confidence 75.
-- **Partial-path completion:** the sole missing link has been completed from source
-  and the route is reachable and unguarded; promote at confidence 75.
+- **Partial-path completion:** the only weakness is an incomplete trace, but the
+  route is reachable and unguarded; promote at confidence 75 with description
+  and the available proof only. State the unverified link explicitly. This is
+  the v4 exception: omit the Fix block because the trace is incomplete.
+
+Agreement never overrides a concrete refutation or an unknown affected compiler.
+Other promotions at 75 require a verified safe fix. If none exists, state that
+explicitly instead of inventing a patch.
 
 ## Leads
 

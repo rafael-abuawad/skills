@@ -3,7 +3,8 @@
 ## Bundle contents and reading discipline
 
 Your bundle concatenates: all in-scope source, the senior-auditor SOP,
-Vyper-language semantics, your specialty, and these rules. Read it fully once
+Vyper-language semantics, your specialty, these rules, and the report-language rules. When memory is
+on and records exist, known findings follow last. Read it fully once
 before producing results. The bundle is the initial source of truth; do not
 re-read in-scope files for the initial pass.
 
@@ -68,14 +69,14 @@ numbers, or a state/call trace. No proof means LEAD. One vulnerability per item;
 different fixes are different items even when they are in the same function.
 
 ```
-FINDING | contract: Name | function: function_name | bug_class: kebab-tag | group_key: Contract | function_name | bug-class
+FINDING | contract: src/vault.vy | function: function_name | bug_class: kebab-tag | group_key: src/vault.vy | function_name | bug-class
 path: caller → entry point → state change / external interaction → impact
 proof: concrete values, exact trace, or quoted source demonstrating the exploit
 compiler_context: relevant pragma / deployment version when language-version behavior matters
 description: one sentence
 fix: one-sentence safe minimal suggestion
 
-LEAD | contract: Name | function: function_name | bug_class: kebab-tag | group_key: Contract | function_name | bug-class
+LEAD | contract: src/vault.vy | function: function_name | bug_class: kebab-tag | group_key: src/vault.vy | function_name | bug-class
 code_smells: precise suspicious code or missing invariant
 unverified: the exact precondition, deployment fact, or external behavior still needed
 compiler_context: relevant pragma / deployment version when language-version behavior matters
@@ -83,5 +84,26 @@ description: one sentence explaining the trail
 ```
 
 Use `compiler_context` only for a version-sensitive claim. The `group_key` format is
-strict: `Contract | function_name | bug-class`. Agents may add specialty fields, but
+strict: `repo-relative.vy | function_name | bug-class`. Agents may add specialty fields, but
 must retain all required fields.
+
+## Identity and prior findings
+
+`contract` is the repository-relative path, including `.vy`, exactly as the source
+heading spells it. Two files with the same basename are different contracts.
+`function` is its original identifier: dunder names stay intact, public getters
+use the variable name, and file-level findings use `__module__`. Attribute a
+module's code defect to that module; attribute an export or binding defect to the
+host. Describe host/module context in the proof. The orchestrator normalizes keys;
+agents keep source spelling in these fields.
+
+When the bundle includes known findings, reuse a listed bug-class label for the
+same defect in the same file and function. Spend reading effort on new ground,
+but report every bug you find in full, including listed bugs.
+
+## Language
+
+Write descriptions and fix suggestions in Simplified Technical English per
+`report-language.md`: active voice, one sentence of at most 25 words, a named actor
+and effect. Preserve identifiers, bug-class labels, quoted source, and diff code.
+Proofs retain concrete values, traces, and source citations.

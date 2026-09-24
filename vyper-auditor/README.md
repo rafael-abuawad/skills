@@ -43,19 +43,50 @@ file-scoped nonreentrancy, modules and `exports:`, `extcall`/`staticcall`,
 # Review specific contracts only
 /vyper-auditor src/vault.vy src/factory.vy
 
-# Save the terminal report as Markdown as well
+# Run one pass without cross-scan memory
+/vyper-auditor --loop 1
+
+# Run three passes; later passes see earlier findings
+/vyper-auditor --loop 3
+
+# Remember findings between single-pass scans
+/vyper-auditor --loop 1 --memory
+
+# Also copy the complete report into the project root
 /vyper-auditor --file-output
 ```
 
-Target the contracts you changed when possible. A narrower scope gives every agent
-more context for the code that matters. Run a second independent pass before a
-high-stakes deployment: model output is non-deterministic, and different passes can
-surface different attack paths.
+Without a supplied count, the skill asks how many passes to run. Bare `--loop`
+means three; explicit counts from 1 through 10 are accepted. The twelve specialties
+run within the runtime's concurrency limit. Every pass sees the same frozen source.
+
+Every scan saves run records and a complete report under
+`.vyper-auditor/runs/YYYYMMDD-HHMMSS/`. Above 20 findings the terminal shows the
+counted top three and the full-report path. `--file-output` makes a byte-identical
+copy named `{project}-pashov-ai-vyper-audit-report-{stamp}.md` in the project root.
+
+Memory is opt-in for one pass and automatic for multiple passes. It lives in
+`.vyper-auditor/memory.tsv`. Findings are NEW or KNOWN across scans; `seen in k/N
+runs` describes repetition inside one scan. Previously recorded issues that were
+not raised again are explicitly **not re-checked**, not assumed fixed. Invalid
+ledgers stop the audit instead of being discarded. Do not run simultaneous scans
+that write the same ledger. Consider ignoring `.vyper-auditor/` in version control.
+
+A plain one-pass scan saves run artifacts but does not read or write memory. Audit
+agents are read-only in your repository; fixes are suggestions. V4 uses confidence
+75 as the fix threshold, with a documented no-fix exception for partial-path
+promotions. Proof and compiler evidence remain part of the Vyper report.
+
+The workflow requires Bash, Python 3.10+, awk, `find`, and standard Unix utilities.
+Git adds revision metadata; without it, revisions are recorded as `none`. Curl is
+used only for the optional version check. Upstream's 15/45/75-minute measurements
+were on Solidity with Opus, not Vyper timing guarantees.
 
 ## Scope and limitations
 
-By default the skill excludes tests, mocks, interfaces, and `lib/` directories from
-finding scope. Agents can still inspect those files to confirm an interface,
+By default the skill excludes tests, mocks, interfaces, dependencies, virtual
+environments, and build output from finding scope. Deployment `.vy` files remain
+in scope. Explicitly named `.vy` files override directory exclusions. Agents can still inspect those files to confirm an interface,
 dependency behavior, deployment configuration, or testable attack path.
 
 The best results are usually on roughly 2,500 lines of Vyper or less. Past 5,000
@@ -64,3 +95,16 @@ concrete code-level paths and weaker at missing specifications, off-chain
 assumptions, governance/game theory, and novel cross-protocol composition. Human
 review, adversarial tests, formal invariants, bug bounties, and monitoring remain
 essential.
+
+## Validation
+
+Run the deterministic fixture suite without launching audit agents:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s vyper-auditor/tests -v
+bash -n vyper-auditor/references/assemble.sh
+```
+
+The suite covers discovery, Vyper identities, pruning, ledger integrity, repeated
+scans, multi-pass assembly, report-size boundaries, and failed coverage. It does
+not measure the quality of a live security audit.

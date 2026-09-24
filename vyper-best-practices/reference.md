@@ -15,8 +15,8 @@ Extended conventions and references for the Vyper Best Practices skill.
 Common pragma combinations:
 
 ```vyper
-# pragma version ^0.4.0
-# pragma evm-version shanghai
+# pragma version ^0.4.3
+# pragma evm-version osaka
 # pragma optimize gas
 # pragma nonreentrancy on
 ```
