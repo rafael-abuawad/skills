@@ -29,7 +29,7 @@ MAX_BATCH: constant(uint256) = 64
 @external
 @view
 def may_pause(available: Capability) -> bool:
-    return Capability.PAUSE in available
+    return available == Capability.PAUSE
 
 @external
 @view
