@@ -3,6 +3,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from collections import Counter
 import json
+import importlib.metadata
+import sys
 import os
 import uuid
 
@@ -17,10 +19,26 @@ def campaign_settings(config):
     if profile not in PROFILES:
         raise ValueError(f"Unknown FYZZ_PROFILE: {profile}")
     examples, steps = PROFILES[profile]
+    profile_path = Path(config["meta_dir"]) / "profiles.json"
+    if profile_path.exists():
+        selected = json.loads(profile_path.read_text())[profile]
+        examples, steps = selected["max_examples"], selected["stateful_step_count"]
     examples = int(os.environ.get("FYZZ_MAX_EXAMPLES", examples))
     steps = int(os.environ.get("FYZZ_STEPS", steps))
     if examples < 1 or steps < 1:
         raise ValueError("FYZZ_MAX_EXAMPLES and FYZZ_STEPS must be positive")
+    output = Path(os.environ.get("FYZZ_RUN_DIR", config["meta_dir"]))
+    output.mkdir(parents=True, exist_ok=True)
+    versions = {"python": sys.version.split()[0]}
+    for distribution in ("hypothesis", "pytest", "titanoboa", "eth-ape", "ape-vyper", "moccasin", "vyper"):
+        try:
+            versions[distribution] = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            pass
+    (output / "effective-settings.json").write_text(json.dumps({
+        "profile": profile, "max_examples": examples, "stateful_step_count": steps,
+        "deadline": None, "versions": versions,
+    }, indent=2) + "\n")
     return settings(max_examples=examples, stateful_step_count=steps, deadline=None,
                     database=DirectoryBasedExampleDatabase(Path(config["meta_dir"]) / "hypothesis"))
 
@@ -30,9 +48,19 @@ def isolation(framework):
         import boa
         return boa.env.anchor()
     if framework == "ape":
-        from ape import chain
-        return chain.isolate()
+        return ape_isolation()
     raise ValueError(f"Unsupported framework: {framework}")
+
+
+@contextmanager
+def ape_isolation():
+    """Use explicit public APIs: some Ape isolate versions suppress exceptions."""
+    from ape import chain
+    snapshot = chain.snapshot()  # Unsupported providers must fail before deployment.
+    try:
+        yield
+    finally:
+        chain.restore(snapshot)
 
 
 def replay_value(value):
@@ -50,7 +78,7 @@ def replay_value(value):
 
 class Diagnostics:
     def __init__(self, config):
-        self.root = Path(config["meta_dir"])
+        self.root = Path(os.environ.get("FYZZ_RUN_DIR", config["meta_dir"]))
         self.example_id = uuid.uuid4().hex
         self.actions = []
         self.counts = Counter()
@@ -101,7 +129,7 @@ class Diagnostics:
                     self.transitions[transition] += 1
         except BaseException as exc:
             entry["outcome"] = "failure"
-            self.failure = {"action": name, "type": type(exc).__name__, "message": str(exc)}
+            self.failure = {**(self.failure or {}), "action": name, "type": type(exc).__name__, "message": str(exc)}
             self.save()
             raise
 

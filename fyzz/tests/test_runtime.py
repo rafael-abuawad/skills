@@ -152,8 +152,9 @@ def test_real_boa_hypothesis_isolation_shrinking_and_repro(tmp_path, bug):
                 self.model.balances["sum"] = self.model.balances.get("sum", 0) + amount
         @rule()
         def unauthorized(self):
-            with self.diagnostics.action("unauthorized", inputs={"actor": str(boa.env.generate_address())}, expected_revert=(boa.BoaError,), match="owner"):
-                with boa.env.prank(boa.env.generate_address()):
+            actor = boa.env.generate_address()
+            with self.diagnostics.action("unauthorized", inputs={"actor": str(actor)}, expected_revert=(boa.BoaError,), match="owner"):
+                with boa.env.prank(actor):
                     self.deployment.add(1)
         @invariant()
         def total(self):
@@ -181,3 +182,36 @@ def test_real_boa_hypothesis_isolation_shrinking_and_repro(tmp_path, bug):
     assert len(deployments) > 1
     assert boa.env.eoa == initial_sender
     assert boa.env.get_code(deployments[-1]) == b""
+
+
+def test_inline_failure_retains_spec_and_run_directory(tmp_path, monkeypatch):
+    output = tmp_path / "campaign"
+    monkeypatch.setenv("FYZZ_RUN_DIR", str(output))
+    diagnostics = Diagnostics(config(tmp_path))
+    def check():
+        assert False, "SP-01"
+    with pytest.raises(AssertionError):
+        with diagnostics.action("deposit", inputs={"amount": 1}):
+            diagnostics.check("SP-01", check)
+    trace = json.loads(next((output / "traces").glob("*.json")).read_text())
+    assert trace["failure"]["spec_id"] == "SP-01"
+    assert trace["failure"]["action"] == "deposit"
+    assert not (Path(config(tmp_path)["meta_dir"]) / "traces").exists()
+
+
+def test_ape_adapter_propagates_assertions_and_requires_snapshots(monkeypatch):
+    from types import SimpleNamespace
+    from fyzz_suite_template.runtime import ape_isolation
+    restored = []
+    chain = SimpleNamespace(snapshot=lambda: 42, restore=lambda value: restored.append(value))
+    monkeypatch.setitem(sys.modules, 'ape', SimpleNamespace(chain=chain))
+    with pytest.raises(AssertionError, match='GL-01'):
+        with ape_isolation():
+            raise AssertionError('GL-01')
+    assert restored == [42]
+    def unsupported():
+        raise NotImplementedError('snapshot unsupported')
+    chain.snapshot = unsupported
+    with pytest.raises(NotImplementedError):
+        with ape_isolation():
+            pytest.fail('must not enter unsupported provider')

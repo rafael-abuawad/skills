@@ -84,6 +84,26 @@ class ToolingTests(unittest.TestCase):
         (self.root / 'test/fuzz/duplicate.py').write_text(code)
         self.assertTrue(self.cli('properties')['GL-01']['drift'])
 
+    def test_sync_tracks_add_remove_specs_and_handwritten_actions(self):
+        self.cli('scaffold')
+        self.cli('inventory', '--artifact', self.artifact())
+        meta = self.root / 'fuzz_data'
+        spec = meta / 'PROPERTIES.md'
+        spec.write_text('- [ ] **GL-01** — balance\n  Dependencies: Counter.add\n')
+        self.cli('snapshot')
+        spec.write_text('- [ ] **GL-01** — balance\n  Dependencies: Counter.remove\n')
+        self.assertEqual(self.cli('diff')['properties']['changed'], ['GL-01'])
+        new = self.root / 'src/Added.vy'
+        new.write_text('value: public(uint256)\n')
+        self.assertEqual(self.cli('diff')['sources']['added'], ['src/Added.vy'])
+        (self.root / 'src/Counter.vy').unlink()
+        self.assertEqual(self.cli('diff')['sources']['removed'], ['src/Counter.vy'])
+        actions = self.root / 'test/fuzz/actions.py'
+        handwritten = actions.read_text() + '\n# handwritten strategy customization\n'
+        actions.write_text(handwritten)
+        self.assertIn('actions.py', self.cli('diff')['suite_hashes']['changed'])
+        self.assertEqual(actions.read_text(), handwritten)
+
     def test_campaign_exit_and_timeout(self):
         self.cli('scaffold')
         runner = json.dumps([sys.executable, '-c', 'import sys; sys.exit(0)'])

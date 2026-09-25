@@ -3,7 +3,7 @@
 The canonical specification is `{META_DIR}/PROPERTIES.md`. Keep one checkbox entry per stable identifier:
 
 ```markdown
-- [ ] GL-01 SHOULD-HOLD — Assets cover redeemable claims.
+- [ ] **GL-01** — Assets cover redeemable claims. Guarantee: SHOULD-HOLD
   Evidence: docs/accounting.md, section Solvency; src/Vault.vy.
   Dependencies: src/Vault.vy; withdraw(uint256); deposit(uint256).
   Implementation: properties.py::check_solvency; machine.py invariant hook.
@@ -19,7 +19,7 @@ The canonical specification is `{META_DIR}/PROPERTIES.md`. Keep one checkbox ent
 | `[-]` | Explicitly disabled; record user intent/reason. |
 | `[~]` | Quarantined because source/spec drift invalidated confidence; not an active assertion. |
 
-Use discoverable Python markers `# fyzz:property GL-01` immediately above the implementing function; include the ID in assertion messages. Record wiring associations in the plan. A marker alone does not prove a property executes, and a checkbox is not test evidence. Inspect actual call sites, decorators, and test outcomes.
+Use a function docstring starting with `fyzz: GL-01` (or `fyzz: SP-01`) on each implementing function; include the ID in assertion messages. Record wiring associations in the plan. A marker alone does not prove a property executes, and a checkbox is not test evidence. Inspect actual call sites, decorators, and test outcomes.
 
 `SHOULD-HOLD` requires a cited documented guarantee, standard, or exact identity with stated domain. `EXPLORATORY` denotes an inferred expectation. Both may contain harness errors: reproduce, validate the model, and confirm assumptions before triage. A clean SHOULD-HOLD violation after that review is a confirmed guarantee violation; severity requires separate impact analysis. Exploratory violations remain leads until the intended behavior is established.
 

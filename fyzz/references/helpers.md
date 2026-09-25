@@ -21,3 +21,11 @@ Helpers do not synthesize deployment semantics, select trustworthy invariants, r
 `{SUITE_DIR}` contains executable Python setup, strategies, model, actions, properties, machine, runtime, conftest, entrypoint, and reproduction tests. `{META_DIR}` contains `fyzz.json`, inventories, `selection.json`, protocol notes, `PROPERTIES.md`, property plans, profiles/effective settings, logs, database, traces, reports, coverage when supported, backups, and `last-run.json`.
 
 Reuse saved paths on maintenance runs. Preserve an existing project-root `PROPERTIES.md`; the Fyzz specification lives in its metadata directory. Scaffold collisions require inspection and selective merging, never blanket regeneration.
+
+## Runtime integration
+
+Activate the project environment (including its `bin` directory on `PATH`) before running inspection, compilation, or campaigns. An absolute Python path alone does not guarantee that framework subprocesses find the matching Vyper compiler. `--runner` is a JSON argv prefix, never shell code; the helper appends the suite path and `-v`. Use `--max-examples`, `--steps`, and `--seed` for explicit campaign overrides.
+
+Each helper campaign writes to a unique `runs/<id>/` directory under metadata: `campaign.log`, `result.json`, `effective-settings.json`, `reachability-summary.json`, and per-example `reachability/` and failure `traces/`. The example database remains shared at `hypothesis/` under metadata. Direct native test runs write diagnostics under metadata unless `FYZZ_RUN_DIR` is set. Profile defaults are editable in metadata `profiles.json`; environment overrides take precedence. Reachability summaries include replay and shrinking, not just novel examples.
+
+`selection.json` and `property-plan.md` are agent-authored artifacts. The helper records them for drift detection but does not infer their protocol semantics. Inspection of active decorators and call sites is required alongside `properties` output. Snapshot commands capture state; they must follow actual validation.

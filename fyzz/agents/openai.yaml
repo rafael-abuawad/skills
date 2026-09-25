@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fyzz"
+  short_description: "Generate stateful Vyper fuzz suites with Hypothesis"
+  default_prompt: "Use $fyzz with this Vyper project."

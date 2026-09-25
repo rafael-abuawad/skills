@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Portable Fyzz artifact tooling. Protocol semantics remain agent-authored."""
 import argparse
+from collections import Counter
 import ast
 import hashlib
 import importlib.metadata
@@ -9,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -161,7 +161,7 @@ def property_map(suite, meta):
     spec = meta / 'PROPERTIES.md'
     entries = {}
     if spec.exists():
-        for state, ident, body in re.findall(r'^- \[([ x~\-])\]\s+\*\*((?:GL|SP)-\d+)\*\*(.*)$', spec.read_text(), re.M):
+        for state, ident, body in re.findall(r'^- \[([ x~\-])\]\s+\*\*((?:GL|SP)-\d+)\*\*(.*?)(?=^- \[|\Z)', spec.read_text(), re.M | re.S):
             if ident in entries:
                 raise ValueError(f'Duplicate property ID: {ident}')
             entries[ident] = {'state': state, 'spec': body, 'implementations': []}
@@ -187,7 +187,9 @@ def snapshot_data(root, suite, meta, saved):
             'sources': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources(root, suite, meta)},
             'signatures': {c['source'] + ':' + c['contract']: sorted(f['signature'] for f in c['functions']) for c in inv['contracts']},
             'properties': property_map(suite, meta),
-            'suite_hashes': {str(p.relative_to(suite)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(suite.rglob('*.py'))}}
+            'suite_hashes': {str(p.relative_to(suite)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(suite.rglob('*.py'))},
+            'selection': read(meta / 'selection.json', {}),
+            'property_plan_hash': hashlib.sha256((meta / 'property-plan.md').read_bytes()).hexdigest() if (meta / 'property-plan.md').exists() else None}
 
 
 def delta(old, new):
@@ -229,9 +231,23 @@ def run(args, root, suite, meta, saved):
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
             code = proc.returncode
+    counts, transitions = Counter(), Counter()
+    diagnostics_errors = []
+    examples_recorded = 0
+    for path in (run_dir / 'reachability').glob('*.json'):
+        try:
+            record = read(path)
+            counts.update(record['counts'])
+            transitions.update(record['transitions'])
+            examples_recorded += 1
+        except (ValueError, KeyError, TypeError) as error:
+            diagnostics_errors.append(f'{path.name}: {error}')
+    write(run_dir / 'reachability-summary.json', {'counts': dict(counts), 'transitions': dict(transitions),
+          'examples_recorded': examples_recorded, 'includes_shrinking_and_replay': True, 'errors': diagnostics_errors})
     result = {'status': status, 'exit_code': code, 'passed': status == 'completed' and code == 0,
               'seconds': round(time.monotonic() - start, 2), 'command': command, 'profile': args.profile,
-              'versions': versions(), 'log': str(run_dir / 'campaign.log')}
+              'launcher_versions': versions(), 'effective_settings': read(run_dir / 'effective-settings.json'),
+              'log': str(run_dir / 'campaign.log')}
     write(run_dir / 'result.json', result)
     return result
 
@@ -280,6 +296,10 @@ def main():
                 if previous is None:
                     raise ValueError('Snapshot missing; run Fyzz and validate before snapshot')
                 result = {key: delta(previous.get(key, {}), current[key]) for key in ('sources', 'signatures', 'properties', 'suite_hashes')}
+                result['versions'] = delta(previous.get('versions', {}), current['versions'])
+                result['config_changed'] = previous.get('config') != current['config']
+                result['selection_changed'] = previous.get('selection') != current['selection']
+                result['property_plan_changed'] = previous.get('property_plan_hash') != current['property_plan_hash']
                 result['inventory_note'] = 'Recompile and refresh contracts.json before interpreting signature drift.'
         print(json.dumps(result, indent=2))
         if args.command == 'run' and not result['passed']:
