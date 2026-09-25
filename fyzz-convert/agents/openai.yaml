@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fyzz Convert"
+  short_description: "Implement Vyper fuzz properties from a written spec"
+  default_prompt: "Use $fyzz-convert with this Vyper project."

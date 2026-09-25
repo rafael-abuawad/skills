@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fyzz Sync"
+  short_description: "Reconcile Vyper fuzz suites with source changes"
+  default_prompt: "Use $fyzz-sync with this Vyper project."
