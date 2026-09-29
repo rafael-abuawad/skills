@@ -14,7 +14,7 @@ report. Preserve compiler-version evidence and Vyper semantics throughout.
   helper below. Exclude dependencies/build output (`node_modules/`, `lib/`,
   `artifacts/`, `cache/`, `out/`, `broadcast/`, `coverage/`, `typechain*/`,
   `.venv/`, `venv/`, `__pycache__/`, `build/`, `dist/`), `.git/`, audit artifacts,
-  interfaces, mocks, `test/`, `tests/`, and `*Test*.vy`, `*Mock*.vy`, `*_test.vy`.
+  interfaces, mocks, `test/`, `tests/`, and `*Test*.vy`, `*Mock*.vy`, `*_mock.vy`, `*mock_*.vy`, `*_test.vy`.
   `script/`, `scripts/`, and `deploy/` remain in scope. Python deployment scripts
   are context for a Vyper path; default discovery does not become a Python audit.
 - **Named files:** scan only explicitly named `.vy` files, including files under
