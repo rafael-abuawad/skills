@@ -9,9 +9,9 @@ Convert pending properties in `{META_DIR}/PROPERTIES.md` into executable asserti
 
 ## Resolve the suite
 
-`PROJECT_ROOT` defaults to the working directory. Resolve `SUITE_DIR` and `META_DIR` from explicit arguments, then the existing `fuzz_data/fyzz.json`; defaults are `test/fuzz` and `fuzz_data`. A custom metadata location must be supplied when it cannot be discovered unambiguously. Locate the sibling `fyzz` directory relative to this skill and use its `scripts/fyzz.py` helper.
+`PROJECT_ROOT` defaults to the working directory. Resolve `SUITE_DIR` and `META_DIR` from explicit arguments, then the existing `fuzz_data/fyzz.json`; defaults are `test/fuzz` and `fuzz_data`. A custom metadata location must be supplied when it cannot be discovered unambiguously. Resolve `FYZZ_PATH` to `../..` relative to this skill directory (the family root containing `scripts/fyzz.py`) and use its `scripts/fyzz.py` helper.
 
-Read [property conventions](../fyzz/references/properties.md) and [maintenance rules](../fyzz/references/maintenance.md). Load the resolved `fyzz.json`, property spec, property plan, setup, actions, model state, and affected Vyper source. If the suite or spec is absent, report that prerequisite and use [Fyzz](../fyzz/SKILL.md) to generate it only when generation is within the user's request.
+Read [property conventions](../../references/properties.md) and [maintenance rules](../../references/maintenance.md). Load the resolved `fyzz.json`, property spec, property plan, setup, actions, model state, and affected Vyper source. If the suite or spec is absent, report that prerequisite and use [Fyzz](../../SKILL.md) to generate it only when generation is within the user's request.
 
 ## Reconcile and implement
 

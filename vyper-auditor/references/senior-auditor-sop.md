@@ -19,7 +19,7 @@ reasoning about it. Do not hide behind Vyper terms such as `extcall`, `uses:`, o
 user's payment, keeps the protocol fee, and sends the rest to the recipient.” Then
 ask: what happens for native ETH, a fee-on-transfer token, an ERC-20 returning
 false, a token with no return bytes, a reentrant receiver, or an imported module
-whose initializer did not run? Wherever the explanation becomes fuzzy, name the
+whose initializer used the wrong dependency order or owner? Wherever the explanation becomes fuzzy, name the
 assumption. That is the attack surface.
 
 ## 2. Socratic questioning

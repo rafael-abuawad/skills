@@ -1,10 +1,11 @@
-# Coverage Baseline
+# Provenance and Vyper Maintenance
 
-This skill is a Vyper adaptation of the upstream
+This independent Vyper skill originated as an adaptation of the upstream
 [`solidity-auditor`](https://github.com/pashov/skills/tree/main/solidity-auditor)
 workflow.
 
-- Upstream workflow version: **4**
+- Historical upstream workflow version: **4**
+- Independent Vyper skill version: **5**
 - Upstream source revision reviewed: `f6c7f0de9cce16f6aa9c57aaac104f0dee90582e`
 - Vyper stable release baseline researched: **0.4.3**
 
@@ -46,19 +47,29 @@ and [advisory index](https://github.com/vyperlang/vyper/security/advisories).
 The covered stable baseline remains 0.4.3. Preserve the advisory index's ID mapping:
 the release notes contain mismatched links for the 0.4.2 concat/slice fixes.
 
+## Independent version 5
+
+The local `VERSION` now tracks Vyper changes independently. Audit invocations do
+not compare it with Solidity-auditor releases or direct users there to upgrade.
+The original branded banner is retained; exported reports use
+`{project-name}-vyper-audit-report-{stamp}.md` and contain no promotional footer.
+The twelve specialties use Vyper instructions directly instead of appended
+translation overrides. The workflow, evidence gates, and memory format remain.
+
 ## Updating
 
-When upstream releases a new `solidity-auditor` version:
-
-1. Diff the full pinned skill, including helper scripts, prompts, report language,
-   judging, report assembly, senior SOP, and all twelve specialist files.
-2. Port every general EVM/protocol pattern, preserving the 12-agent topology and
-   deduplication/fix-preservation gates.
-3. Check Vyper release notes and security advisories. Update
-   `references/vyper-language.md` with any new language feature, changed semantic,
-   or affected compiler range; do not turn a compiler advisory into a finding
-   without deployed-version evidence.
-4. Update `VERSION` only when the Vyper skill reaches the current upstream
-   coverage baseline, and update this file's revision and release baseline.
+1. Review the official [Vyper release notes](https://docs.vyperlang.org/en/stable/release-notes.html),
+   [security advisories](https://github.com/vyperlang/vyper/security/advisories),
+   and language documentation for the supported compiler versions. The stable
+   documentation and advisory index were rechecked on 2026-10-02; the covered
+   stable release remains 0.4.3.
+2. Update `references/vyper-language.md` and affected specialties for changed
+   semantics, new features, and affected compiler ranges. Require deployed or
+   reproducibly configured version evidence for compiler-specific findings.
+3. Review EVM/protocol attack coverage and workflow improvements on their merits.
+   The historical Solidity source is optional reference material; adopting changes
+   does not require matching its version or porting language-specific assumptions.
+4. Increment the local `VERSION` for a Vyper skill release and record material
+   changes here, preserving the historical source revision and attribution.
 5. Run the fixture suite in README.md, shell syntax checks, skill validation, and
    local reference-link checks. Ensure all active references resolve.

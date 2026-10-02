@@ -378,7 +378,7 @@ def terminal(args):
     if args.file_output:
         name = scope_read(directory)['name']
         # name comes from the root basename, never from a finding or a shell command.
-        target = directory.parent.parent.parent / f'{name}-pashov-ai-vyper-audit-report-{directory.name}.md'
+        target = directory.parent.parent.parent / f'{name}-vyper-audit-report-{directory.name}.md'
         target.write_bytes(report.read_bytes())
     findings = re.findall(r'^\[(\d+)\] \*\*\d+\. (.+)\*\*\n\n(`[^`]+` · Confidence: \d+[^\n]*)', text, re.M)
     count = len(re.findall(r'^\[\d+\] \*\*', text, re.M))

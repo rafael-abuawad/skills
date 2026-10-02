@@ -6,12 +6,19 @@ Other agents trace execution, check arithmetic, verify access control, analyze e
 
 ## Step 1 — Enumerate every paired surface
 
+Add Vyper-specific pairs to the enumeration: `extcall` token path ↔ native
+`msg.value` path; normal ABI return ↔ `default_return_value`; `raw_call` success ↔
+failure tuple; module function ↔ its `exports:` host entry; pragma-protected file
+↔ imported unprotected module; `@raw_return` proxy path ↔ ABI-decoding caller; and
+storage state ↔ transaction-only `transient` state. Compare `assert` guards and
+`log` events, using Vyper syntax.
+
 For each contract in scope, list:
 
 - **Operation pairs:** deposit ↔ withdraw, mint ↔ burn, lock ↔ unlock, set ↔ get, encode ↔ decode, approve ↔ pull, request ↔ fulfill, open ↔ close, stake ↔ unstake.
 - **Walk pairs:** modify ↔ settle, view ↔ modify, simulate ↔ execute, pre ↔ post, init ↔ teardown.
 - **Branch pairs (within a function):** native vs ERC20, normal vs admin/force, happy path vs revert path, first-time vs subsequent, empty vs non-empty input.
-- **Variant pairs:** user `X()` ↔ admin `forceX()`, normal `X()` ↔ batch `XBatch()`, sync ↔ async.
+- **Variant pairs:** user `x()` ↔ admin `force_x()`, normal `x()` ↔ batch `x_batch()`, sync ↔ async.
 
 For each pair, note `file:line` of both sides. This list is your work plan.
 
@@ -19,10 +26,10 @@ For each pair, note `file:line` of both sides. This list is your work plan.
 
 For each pair, side-by-side:
 
-1. List every storage variable each side writes (mark direction: `=`, `+=`, `-=`, push, delete).
+1. List every storage variable each side writes (mark direction: `=`, `+=`, `-=`, `append`, `pop`, `empty(T)` assignment).
 2. List every storage variable each side reads.
 3. Diff the two lists. Surface:
-   - Same variable written by both, but in non-mirror direction (e.g., user variant sets `settleAmount=0`, admin variant sets `settleAmount=totalBalance` — invariant break)
+   - Same variable written by both, but in non-mirror direction (e.g., user variant sets `settle_amount=0`, admin variant sets `settle_amount=total_balance` — invariant break)
    - Variable written by one side but not the other (state coupling broken)
    - Variable read by one but not the other (stale-read risk)
    - Mirror functions that mutate entirely different slot sets
@@ -53,28 +60,19 @@ For each storage variable used across the contract:
 
 ## Step 5 — Admin-function variants
 
-For every admin function, check if it's a variant of a user-side function (`mint` ↔ `adminMint`, `swap` ↔ `forceSwap`, `pause/unpause` for any guarded op, `set*` for parameters that gate user behavior):
+For every admin function, check if it's a variant of a user-side function (`mint` ↔ `admin_mint`, `swap` ↔ `force_swap`, `pause/unpause` for any guarded op, `set*` for parameters that gate user behavior):
 
-1. Diff against the user-side function for missing manipulation guards (slippage, deadline, manipulation locks), missing input validation, asymmetric state updates, missing emit.
-2. The Beefy pattern: `deposit` had `onlyCompPeriods`, but `setPositionWidth` and `unpause` mirrored the same liquidity-rebalancing flow without that guard → sandwich drains TVL on admin parameter change.
+1. Diff against the user-side function for missing manipulation guards (slippage, deadline, manipulation locks), missing input validation, asymmetric state updates. Missing events alone are not findings.
+2. A Vyper example: `deposit` checks an allowed compounding period, but `set_position_width` and `unpause` mirrored the same liquidity-rebalancing flow without that guard → sandwich drains TVL on admin parameter change.
 3. Devs under-test admin functions. They view them as "trusted actor only" and skip layered defenses. For every admin parameter change that affects user-relevant state, ask: can a user sandwich the admin transaction?
 
 ## Step 6 — Bad symmetry (defensive checks that should not exist)
 
 Redundant or over-restrictive checks:
 
-- Two checks of the same invariant in adjacent functions where the second is now over-restrictive (e.g., `prepareBoxes` decrements counter, `redeemBoxes` re-checks counter > 0 → permanent DoS once preparation finishes)
+- Two checks of the same invariant in adjacent functions where the second is now over-restrictive (e.g., `prepare_boxes` decrements counter, `redeem_boxes` re-checks counter > 0 → permanent DoS once preparation finishes)
 - Comments saying "safety check" — frequently the safety claim is wrong
 - Symmetric validation in functions that should be asymmetric
-
-## Vyper application (takes precedence over Solidity examples)
-
-Add Vyper-specific pairs to the enumeration: `extcall` token path ↔ native
-`msg.value` path; normal ABI return ↔ `default_return_value`; `raw_call` success ↔
-failure tuple; module function ↔ its `exports:` host entry; pragma-protected file
-↔ imported unprotected module; `@raw_return` proxy path ↔ ABI-decoding caller; and
-storage state ↔ transaction-only `transient` state. Compare `assert` guards and
-`log` events, not Solidity modifiers or `emit` syntax.
 
 ## Output fields
 

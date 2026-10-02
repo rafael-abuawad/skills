@@ -6,6 +6,19 @@ Other agents specialize by bug category. You specialize in **methodology**: appl
 
 ## Step 1 — Enumerate every boundary
 
+Enumerate Vyper boundaries as `extcall`, `staticcall`, `raw_call`, `send`,
+`raw_create`, `create_from_blueprint`, `create_minimal_proxy_to`, `@raw_return`,
+`__default__`, `abi_encode`, `_abi_decode`, `concat`, `slice`, `extract32`, and
+module `exports:`. For a typed interface call, separately test no code,
+no-return/default return, false return, fee-on-transfer/rebase/blacklist behavior,
+and `skip_contract_check=True`. For raw calls, test false success, empty/truncated
+response, malformed response, reentry, and delegatecall storage context.
+
+Use Vyper values in examples: `empty(address)` for zero address,
+`max_value(uint256)` for max uint, and `Bytes[N]` for bounded bytes. Prove
+raw-data bugs through actual parser semantics or an affected compiler-version
+path, accounting for compiler-enforced bounds.
+
 For each contract in scope, list every:
 - External call site (`extcall`, `staticcall`, `raw_call`, `send`, or a module/interface wrapper that performs one)
 - Payable function (`@external @payable`, including `__default__`)
@@ -25,7 +38,7 @@ For each call site identified in Step 1, ask:
 3. **Empty / zero / max input.** Zero amount: skip, revert, or wrongly proceed? Empty `Bytes`: does `_abi_decode` or custom parser accept a valid-looking default? `max_value(uint256)`: does checked math revert, or do unsafe/raw operations corrupt state?
 4. **Return-value handling.** Is an `extcall` bool asserted? Is a `raw_call` success flag checked, returndata sufficiently long, and decoded response semantically validated? Is revert data treated as a valid result?
 5. **Sentinel-placeholder used in token op.** A native placeholder that reaches `extcall IERC20(asset)...` normally fails code/ABI checks; with `skip_contract_check` or raw-call handling it may silently no-op. Walk every sentinel branch through its downstream token operation.
-6. **False-returning ERC20.** Tokens that return `false` instead of reverting (Tether Gold class) silently corrupt state when `require(token.transfer(...))` is omitted. Distinct from USDT-style void return — both must be checked.
+6. **False-returning ERC20.** Tokens that return `false` instead of reverting (Tether Gold class) silently corrupt state when `assert extcall IERC20(token).transfer(...)` is omitted. Distinct from USDT-style void return — both must be checked.
 7. **ERC165 dispatch fallback.** Decoders or wrappers using `supportsInterface` to dispatch between fallback branches fall through to default behavior when the wrapped contract omits ERC165; downstream code paths assume the wrong interface.
 8. **ERC721 hook re-entry.** `safeTransferFrom` calls `onERC721Received` on the receiver before state finalizes; the receiver re-enters the originating contract and observes inconsistent state.
 9. **Unrestricted external call from custody.** A contract holding tokens or NFTs performs an external call whose target and calldata are attacker-controlled; attacker calls back into the held-asset contract (`safeTransferFrom`) using the holding contract's authority.
@@ -67,21 +80,6 @@ For each finding, state THREE things:
 - The **actual behavior** under the corner-case input you supply
 
 Without all three, it's a LEAD.
-
-## Vyper application (takes precedence over Solidity examples)
-
-Enumerate Vyper boundaries as `extcall`, `staticcall`, `raw_call`, `send`,
-`raw_create`, `create_from_blueprint`, `create_minimal_proxy_to`, `@raw_return`,
-`__default__`, `abi_encode`, `_abi_decode`, `concat`, `slice`, `extract32`, and
-module `exports:`. For a typed interface call, separately test no code,
-no-return/default return, false return, fee-on-transfer/rebase/blacklist behavior,
-and `skip_contract_check=True`. For raw calls, test false success, empty/truncated
-response, malformed response, reentry, and delegatecall storage context.
-
-Use Vyper values in examples: `empty(address)` for zero address,
-`max_value(uint256)` for max uint, and `Bytes[N]` rather than calldata bytes. Do
-not claim a Solidity assembly out-of-bounds behavior exists in Vyper source; prove
-an actual raw-data semantic or affected compiler-version path.
 
 ## Output fields
 

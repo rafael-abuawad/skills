@@ -63,4 +63,4 @@ For failures, distinguish contract behavior from faulty setup, nondeterminism, b
 
 Write `{META_DIR}/report.md` with tested scope, framework/compiler versions, commands/settings, action reachability, available Vyper coverage, property status, violations/evidence, reproduction commands, blockers, and next steps. A clean bounded campaign establishes only that no violation was found in that run. Timeouts are incomplete.
 
-Run final smoke/collection checks. After successful suite validation, run `snapshot` to establish or refresh `{META_DIR}/last-run.json`; unresolved harness failures must not become the new baseline. For later property edits use [fyzz-convert](../fyzz-convert/SKILL.md); for source drift use [fyzz-sync](../fyzz-sync/SKILL.md).
+Run final smoke/collection checks. After successful suite validation, run `snapshot` to establish or refresh `{META_DIR}/last-run.json`; unresolved harness failures must not become the new baseline. For later property edits use [fyzz-convert](skills/fyzz-convert/SKILL.md); for source drift use [fyzz-sync](skills/fyzz-sync/SKILL.md).

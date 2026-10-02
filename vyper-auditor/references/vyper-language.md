@@ -7,7 +7,8 @@ misuses that property.
 
 ## 1. Establish the deployed compiler context first
 
-Create a short private ledger for every in-scope file:
+Record a short compiler-context inventory in your working analysis for every
+in-scope file; audit agents keep it in memory and write no repository files:
 
 - Read `# pragma version` in the file and any imported first-party module.
 - Corroborate it from `moccasin.toml`, `pyproject.toml`, lockfiles, CI, deployment
@@ -128,9 +129,11 @@ auditing.
 - Map every `from ... import`, `initializes:`, `uses:`, dependency binding, and
   `exports:` declaration. Include first-party imported `.vy` modules in a targeted
   trace even when they are not part of default scope.
-- `initializes:` means the importing contract owns module state and must invoke the
-  module initializer during `__init__`. Check each initializer runs exactly once,
-  with the intended owner, role, token, oracle, and implementation addresses.
+- `initializes:` means the importing contract owns module state. The compiler
+  enforces initialization of touched state and invocation of declared module
+  constructors; an uncompilable omitted or repeated initializer is not a deployed
+  exploit. Check dependency order and the actual owner, role, token, oracle, and
+  implementation inputs; wrong order or values can still compile and cause harm.
 - `uses:` gives a module access to another module's state. Verify dependency
   bindings (including walrus syntax) refer to the intended instance rather than a
   compatible-but-wrong module.
@@ -173,9 +176,12 @@ auditing.
 - `convert(x, smaller_type)` is bounds checked; do not report it as a Solidity-style
   silent downcast. Still trace signed/unsigned boundaries, `decimal` conversion,
   bytes/integer representations, and conversions followed by unsafe arithmetic.
-- `decimal` is fixed-point with 10 decimal places. Never assume it is WAD. Normalize
+- `decimal` is fixed-point with 10 decimal places; since 0.4.0 it requires
+  the compiler's `--enable-decimals` setting. Never assume it is WAD. Normalize
   token, oracle, basis-point, and decimal scales explicitly; test zero, one, max,
   and smallest nonzero values.
+- Integer `//` and decimal `/` have different type domains; signed division
+  truncates toward zero. Keep proofs faithful to the expression's actual type.
 - `_abi_decode`, `abi_encode`, `concat`, `slice`, `extract32`, `method_id`, and
   dynamic `Bytes[N]`, `String[N]`, or `DynArray[T, N]` inputs are boundary surfaces.
   Validate semantic length/domain as well as compiler-enforced bounds.
@@ -202,3 +208,4 @@ profitable or materially harmful path.
 - Control structures and nonreentrancy: <https://docs.vyperlang.org/en/stable/control-structures.html>
 - Built-ins: <https://docs.vyperlang.org/en/stable/built-in-functions.html>
 - Modules: <https://docs.vyperlang.org/en/stable/using-modules.html>
+- Types and arithmetic: <https://docs.vyperlang.org/en/stable/types.html>

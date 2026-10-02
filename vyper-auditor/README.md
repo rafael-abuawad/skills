@@ -1,6 +1,6 @@
 # Vyper Auditor
 
-A parallel security review for Vyper contracts: focused findings in minutes, before
+A parallel security review for Vyper contracts: evidence-backed findings before
 you ship a change.
 
 Built for:
@@ -63,7 +63,7 @@ run within the runtime's concurrency limit. Every pass sees the same frozen sour
 Every scan saves run records and a complete report under
 `.vyper-auditor/runs/YYYYMMDD-HHMMSS/`. Above 20 findings the terminal shows the
 counted top three and the full-report path. `--file-output` makes a byte-identical
-copy named `{project}-pashov-ai-vyper-audit-report-{stamp}.md` in the project root.
+copy named `{project}-vyper-audit-report-{stamp}.md` in the project root.
 
 Memory is opt-in for one pass and automatic for multiple passes. It lives in
 `.vyper-auditor/memory.tsv`. Findings are NEW or KNOWN across scans; `seen in k/N
@@ -73,14 +73,13 @@ ledgers stop the audit instead of being discarded. Do not run simultaneous scans
 that write the same ledger. Consider ignoring `.vyper-auditor/` in version control.
 
 A plain one-pass scan saves run artifacts but does not read or write memory. Audit
-agents are read-only in your repository; fixes are suggestions. V4 uses confidence
+agents are read-only in your repository; fixes are suggestions. The workflow uses confidence
 75 as the fix threshold, with a documented no-fix exception for partial-path
 promotions. Proof and compiler evidence remain part of the Vyper report.
 
 The workflow requires Bash, Python 3.10+, awk, `find`, and standard Unix utilities.
-Git adds revision metadata; without it, revisions are recorded as `none`. Curl is
-used only for the optional version check. Upstream's 15/45/75-minute measurements
-were on Solidity with Opus, not Vyper timing guarantees.
+Git adds revision metadata; without it, revisions are recorded as `none`.
+Runtime and cost depend on source size, pass count, model, and concurrency.
 
 ## Scope and limitations
 

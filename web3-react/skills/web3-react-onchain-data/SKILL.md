@@ -181,7 +181,7 @@ Persisted React Query data must have a version/buster, max age, a serialization 
 
 ## Source-Derived Patterns
 
-For broader source rationale, read [Uniswap Interface Research Notes](../web3-react/references/uniswap-interface-patterns.md).
+For broader source rationale, read [Uniswap Interface Research Notes](../../references/uniswap-interface-patterns.md).
 
 Generalized from Uniswap Interface source (examined at `0d49e580c1`):
 

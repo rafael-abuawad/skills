@@ -62,7 +62,7 @@ Output format: see shared-rules.md inside your bundle.
 
 The "Known findings" paragraph is included **only when memory is on and `known-findings.md` was appended**. On a plain scan omit that paragraph so agents do not search for absent context.
 
-The READ-ONLY paragraph is **unconditional** — every agent, every mode, every pass. It is here because a real scan proved it necessary: an agent built Foundry proof-of-concept files inside the audited repository and deleted them afterwards. It left the tree clean and the stored SHA honest, and it was still wrong. A later editor must not make it conditional, and must not soften it into a preference.
+The READ-ONLY paragraph is **unconditional** — every agent, every mode, every pass. It is here because a real scan proved it necessary: an agent built proof-of-concept files inside the audited repository and deleted them afterwards. It left the tree clean and the stored SHA honest, and it was still wrong. A later editor must not make it conditional, and must not soften it into a preference.
 
 ## Gap-hunter prompt
 

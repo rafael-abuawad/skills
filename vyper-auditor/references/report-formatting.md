@@ -97,7 +97,7 @@ nothing”; surviving agents that found nothing remain a valid completed run.
 
 Every scan assembles `.vyper-auditor/runs/{stamp}/full-report.md`. With
 `--file-output`, copy those bytes to
-`{project-name}-pashov-ai-vyper-audit-report-{stamp}.md` in the audited root.
+`{project-name}-vyper-audit-report-{stamp}.md` in the audited root.
 
 At most 20 findings: print the report in full. More than 20: print scope unchanged,
 `Findings List — top 3 of F`, three mechanically extracted rows, one full-report

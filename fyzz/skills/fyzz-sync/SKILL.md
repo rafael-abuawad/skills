@@ -9,9 +9,9 @@ Compare an existing Fyzz suite with its validated baseline. Default to a read-on
 
 ## Inspect drift
 
-`PROJECT_ROOT` defaults to the working directory. Resolve `SUITE_DIR` and `META_DIR` from explicit arguments, then the existing `fuzz_data/fyzz.json`; defaults are `test/fuzz` and `fuzz_data`. Supply a custom metadata location when discovery is ambiguous. Locate the sibling `fyzz` directory relative to this skill.
+`PROJECT_ROOT` defaults to the working directory. Resolve `SUITE_DIR` and `META_DIR` from explicit arguments, then the existing `fuzz_data/fyzz.json`; defaults are `test/fuzz` and `fuzz_data`. Supply a custom metadata location when discovery is ambiguous. Resolve `FYZZ_PATH` to `../..` relative to this skill directory (the family root containing `scripts/fyzz.py`).
 
-Read [maintenance rules](../fyzz/references/maintenance.md) and [property conventions](../fyzz/references/properties.md). Read the resolved configuration, `last-run.json`, current sources, contract inventory, actions, and property spec.
+Read [maintenance rules](../../references/maintenance.md) and [property conventions](../../references/properties.md). Read the resolved configuration, `last-run.json`, current sources, contract inventory, actions, and property spec.
 
 Run:
 

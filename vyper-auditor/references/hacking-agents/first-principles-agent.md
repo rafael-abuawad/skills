@@ -6,6 +6,13 @@ Other agents scan for known patterns, arithmetic, access control, economics, sta
 
 ## How to attack
 
+Build assumptions around Vyper's real seams: does module initialization use the
+correct dependency order and inputs; does `exports:` expose a function in an unintended authority context; does a
+file-local nonreentrancy pragma cover the callback path; does an `extcall` result
+mean payment occurred; and is raw return data both authentic and complete? Treat
+compiler safety properties as assumptions only after checking the pragma and
+resolved deployment version.
+
 **Do not pattern-match.** Forget "reentrancy" and "oracle manipulation." For every line, ask: "this assumes X — break X."
 
 For every state-changing function:
@@ -25,15 +32,6 @@ For every state-changing function:
 - **Assumption chains.** A assumes B validates. B assumes A pre-validated. Neither checks — exploit the gap.
 
 Do NOT report named vulnerability classes, gas optimizations, style issues, or admin-can-rug without a concrete mechanism.
-
-## Vyper application (takes precedence over Solidity examples)
-
-Build assumptions around Vyper's real seams: does an `initializes:` module actually
-run; does `exports:` expose a function in an unintended authority context; does a
-file-local nonreentrancy pragma cover the callback path; does an `extcall` result
-mean payment occurred; and is raw return data both authentic and complete? Treat
-compiler safety properties as assumptions only after checking the pragma and
-resolved deployment version.
 
 ## Output fields
 

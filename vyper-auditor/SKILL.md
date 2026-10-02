@@ -27,7 +27,7 @@ report. Preserve compiler-version evidence and Vyper semantics throughout.
 - **`--memory`:** remember findings and leads between scans. Off unless requested
   or the pass count exceeds 1.
 - **`--file-output`:** copy the assembled report to
-  `{project-name}-pashov-ai-vyper-audit-report-{stamp}.md` in the audited root.
+  `{project-name}-vyper-audit-report-{stamp}.md` in the audited root.
   It never regenerates the report.
 
 A **scan** is one invocation; a **run** is one pass of twelve specialties. Ledger
@@ -50,11 +50,8 @@ its `references/` directory, not another auditor's similarly named references.
 and standard Unix utilities; verify availability before work. Missing runtime:
 stop with the missing command, without substituting a model-written report.
 
-In parallel, read local `VERSION`, discover the runtime's agent tool, and fetch
-`https://raw.githubusercontent.com/pashov/skills/main/solidity-auditor/VERSION`
-with `curl -sf --max-time 10`. Warn only if both values parse as numbers and local
-is lower: “⚠️ The Vyper auditor is behind the Solidity-auditor coverage baseline.
-Please upgrade: https://github.com/pashov/skills”. Fetch failure is silent.
+Read local `VERSION` and discover the runtime's agent tool. This skill's version
+tracks its own Vyper workflow and coverage.
 
 ### Turn 1b — Model and pass picker
 
@@ -77,9 +74,7 @@ integer (or a clearly spelled-out number); outside 1–10, ask once more, then u
 an unanswered conversational question remains pending. Previously supplied invalid
 counts use the same validation. Bare `--loop` has already selected 3; ask nothing.
 
-Upstream measured about 15/45/75 minutes on a 2,228-line Solidity project using
-Opus. These are not Vyper benchmarks or promises. Cost and runtime grow with
-passes, source size, model, and concurrency limits.
+Cost and runtime grow with passes, source size, model, and concurrency limits.
 
 ### Turn 1c — Freeze source and open state
 

@@ -6,6 +6,12 @@ Other agents cover known patterns, logic/state, access control, and arithmetic. 
 
 ## Attack surfaces
 
+- Audit `staticcall` oracle reads for stale, zero, negative, wrong-decimal, and
+  manipulable values; static execution says nothing about economic correctness.
+- Treat `raw_create`, blueprints, and factory-created children as value-flow
+  surfaces: constructor ETH, salt ownership, zero-address failure, and child
+  initialization can all change who owns assets.
+
 **Break dependencies.** For every external dependency (oracle, token, cross-contract call), construct a failure that permanently blocks withdrawals, liquidations, or claims. Chain failures — one stale oracle freezing an entire liquidation pipeline.
 
 **Exploit token misbehavior.** Fee-on-transfer, rebasing, blacklisting, pausable, void-return. Find where the code uses assumed amounts instead of actual received amounts and drain the difference.
@@ -17,7 +23,7 @@ Other agents cover known patterns, logic/state, access control, and arithmetic. 
 - Find where the query function differs from the execution function (`maxDeposit` vs actual `mint` limits).
 - Exploit hardcoded ERC-2612 permit against non-standard tokens like DAI.
 
-**Exploit token interfaces.** A typed `extcall` without `default_return_value` reverts on no-return tokens; with it, the returned/defaulted bool still must be asserted. Break ignored false returns, `skip_contract_check`, and raw calls whose success/response is treated as a transfer without validation.
+**Exploit token interfaces.** A typed `extcall` without `default_return_value` reverts on no-return tokens; with it, the returned/defaulted bool still must be asserted. Break ignored false returns, `skip_contract_check`, and raw calls whose success/response is treated as a transfer without validation. For `revert_on_failure=False`, check the success flag; with the default, failure reverts. Validate response length and decoded bool before accounting; raw-call success alone does not prove token transfer.
 
 **Abuse sentinel addresses.** For every placeholder (`empty(address)`, a native-token sentinel, etc.), trace an `extcall`/`staticcall`/`raw_call` to it. Exploit the revert, no-op, empty response, or defaulted success and the accounting that follows.
 
@@ -26,21 +32,6 @@ Other agents cover known patterns, logic/state, access control, and arithmetic. 
 **Weaponize legitimate features.** Use the protocol's own mechanisms against it: deposit liquidity to make governance thresholds unreachable, trigger intentional reverts to poison refund records, choose which provider fulfills a pending request.
 
 **Every finding needs concrete economics.** Show who profits, how much, at what cost. No numbers = LEAD.
-
-## Vyper application (takes precedence over Solidity examples)
-
-- For typed token calls, distinguish an asserted `extcall` bool from ignored
-  return data. `default_return_value=True` belongs on an interface call and only
-  handles empty returndata; it is safe only when the result is still asserted and
-  the token/no-return policy is intentional.
-- For `raw_call`, prove the code checks `success`, bounds response length, and
-  decodes/validates the response before changing accounting. There is no automatic
-  ERC-20 safety wrapper.
-- Audit `staticcall` oracle reads for stale, zero, negative, wrong-decimal, and
-  manipulable values; static execution says nothing about economic correctness.
-- Treat `raw_create`, blueprints, and factory-created children as value-flow
-  surfaces: constructor ETH, salt ownership, zero-address failure, and child
-  initialization can all change who owns assets.
 
 ## Output fields
 

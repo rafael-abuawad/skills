@@ -376,11 +376,14 @@ class ScanTests(unittest.TestCase):
         self.assertIn('top 3 of 21', terminal)
         self.assertNotIn('**Proof**', terminal)
         self.assertNotIn(' Seen |', terminal)
-        copy = self.root / 'project-pashov-ai-vyper-audit-report-20260924-120000.md'
+        copy = self.root / 'project-vyper-audit-report-20260924-120000.md'
         self.assertEqual(copy.read_bytes(), (self.directory / 'full-report.md').read_bytes())
         self.assertIn(str(copy), terminal)
         self.assertNotIn(str(self.directory / 'full-report.md'), terminal)
         self.assertEqual(report.count('**Proof**'), 21)
+        self.assertNotIn('pashov', report.lower())
+        self.assertNotIn('consultation', report.lower())
+        self.assertIn('This review was performed by an AI assistant', report)
 
     def test_stamp_collision_does_not_overwrite(self):
         self.prepare()

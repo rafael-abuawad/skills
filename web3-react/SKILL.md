@@ -9,14 +9,14 @@ Build an application that is correct under wallet changes, chain changes, RPC fa
 
 This skill is the entry point. Before implementing a focused feature, load:
 
-- `../web3-react-onchain-data/SKILL.md` for contract reads, multicalls, logs, indexers, and cache design.
-- `../web3-react-transactions/SKILL.md` for simulations, writes, permits, approvals, and transaction lifecycle UX.
-- `../web3-react-transaction-engine/SKILL.md` when a flow has durable/multiple steps or must survive navigation and refresh.
-- `../web3-react-wallets/SKILL.md` for connectors, intentional reconnect, account identity, and capability discovery.
-- `../web3-react-dapp-security/SKILL.md` for pre-signing validation, risk scans, recipient/token/approval safety, and acknowledgement UX.
-- `../web3-react-account-abstraction/SKILL.md` for EIP-5792, ERC-4337, EIP-7702, paymasters, and embedded wallets.
-- `../web3-react-defi-execution/SKILL.md` for quote freshness, slippage, route validation, and DeFi execution plans.
-- `../web3-react-testing/SKILL.md` for unit/integration/Anvil-fork E2E coverage.
+- `skills/web3-react-onchain-data/SKILL.md` for contract reads, multicalls, logs, indexers, and cache design.
+- `skills/web3-react-transactions/SKILL.md` for simulations, writes, permits, approvals, and transaction lifecycle UX.
+- `skills/web3-react-transaction-engine/SKILL.md` when a flow has durable/multiple steps or must survive navigation and refresh.
+- `skills/web3-react-wallets/SKILL.md` for connectors, intentional reconnect, account identity, and capability discovery.
+- `skills/web3-react-dapp-security/SKILL.md` for pre-signing validation, risk scans, recipient/token/approval safety, and acknowledgement UX.
+- `skills/web3-react-account-abstraction/SKILL.md` for EIP-5792, ERC-4337, EIP-7702, paymasters, and embedded wallets.
+- `skills/web3-react-defi-execution/SKILL.md` for quote freshness, slippage, route validation, and DeFi execution plans.
+- `skills/web3-react-testing/SKILL.md` for unit/integration/Anvil-fork E2E coverage.
 - `wagmi-development` only when modifying Wagmi itself rather than consuming it in an application.
 
 ## First: Discover, Then Design

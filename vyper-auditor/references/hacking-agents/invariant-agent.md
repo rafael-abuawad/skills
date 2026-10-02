@@ -6,11 +6,22 @@ Other agents trace execution, check arithmetic, verify access control, analyze e
 
 ## Step 1 — Map every invariant
 
+- Include module-owned state, public getters, `transient` variables, and exported
+  module functions in every invariant's writer/reader map. A file-level
+  nonreentrancy pragma does not automatically cover an imported module.
+- Compare internal accounting with `self.balance` and token balances cautiously:
+  ETH can be force-fed and rebasing/fee-on-transfer tokens make external balances
+  diverge without a direct protocol call.
+- Check that `@raw_return`/proxy paths, factory children, and `raw_call` callbacks
+  cannot observe or persist a partially updated invariant.
+- A Vyper-bounded loop can still violate liveness if a user controls a `range`
+  stop that exceeds its bound or a permitted bound exceeds practical gas.
+
 Extract every relationship that must hold:
 
-- **Conservation laws.** "sum of balances = totalSupply", "deposited - withdrawn = contract balance". List every function that modifies any term.
+- **Conservation laws.** "sum of balances = total_supply", "deposited - withdrawn = contract balance". List every function that modifies any term.
 - **State couplings.** When X changes, Y must change too. Find all writers of X and identify which ones forget to update Y.
-- **Capacity constraints.** For every `require(value <= limit)`, find ALL paths that increase `value`. Identify paths that skip the check.
+- **Capacity constraints.** For every `assert value <= limit`, find ALL paths that increase `value`. Identify paths that skip the check.
 - **Interface guarantees.** Find where view functions promise values that state-changing functions fail to honor.
 
 ## Step 2 — Break each invariant
@@ -22,10 +33,10 @@ Extract every relationship that must hold:
 - **Bypass cap enforcement.** Enumerate ALL paths modifying a capped value — settlement, fee accrual, emergency mode, admin ops. Find the path that skips the check.
 - **Exploit emergency transitions.** Break invariants during transition into or out of emergency mode. Find value stranded by incomplete cleanup.
 - **Use stale cached state after coupled mutation.** A function caches `state.x`, calls a mutator that writes `state.x`, then uses the cached pre-mutation value. Enumerate every cache-then-mutate-then-use chain; the cache must be invalidated or re-read after the mutator.
-- **Reset timers via secondary call paths.** A function unconditionally updates a timestamp (`asset.timestamp = block.timestamp`, `lastClaim`) that an adversary uses to repeatedly reset a window (JIT, cooldown, lockup). Find every `updateTimestamp` call not gated by an explicit branch.
+- **Reset timers via secondary call paths.** A function unconditionally updates a timestamp (`asset.timestamp = block.timestamp`, `last_claim`) that an adversary uses to repeatedly reset a window (JIT, cooldown, lockup). Find every `update_timestamp` call not gated by an explicit branch.
 - **Mutate global parameters during in-flight operations.** Multi-block operations (lottery draws, vault deposits, swap settlements) assume constant parameters. Find every setter callable while a draw/settle/multistep is ACTIVE; settlement reads current values, not values captured at start.
-- **Diverge view from write.** `queryX` returns one value; `doX` with the same inputs writes a different value because a penalty/fee/accrual/cascade is omitted from the view. Enumerate every view/write pair; the bodies' math must match modulo state mutation.
-- **Break peg invariant during partial mint.** Stablecoin or pegged-share mints that partially fail leave a portion of supply un-collateralized; the peg invariant `supply ≤ backing` quietly breaks until the next full mint cycle.
+- **Diverge view from write.** `query_x` returns one value; `do_x` with the same inputs writes a different value because a penalty/fee/accrual/cascade is omitted from the view. Enumerate every view/write pair; the bodies' math must match modulo state mutation.
+- **Break peg invariant during partial mint.** Trace ignored external-call failures, early successful returns, or multi-transaction mint stages that persist supply without backing. A propagated revert rolls back state; prove a successful or asynchronous path that violates `supply ≤ backing`.
 - **Strand value across emergency transitions.** Emergency mode pauses normal flows but the cleanup path doesn't sweep accumulated rewards/earnings; value generated in emergency is permanently stuck. Find every emergency-pause that lacks a paired cleanup.
 - **Bypass capacity caps on secondary mutation paths.** A `<= cap` check enforced on `deposit()` is skipped on settlement, fee accrual, or LP-earnings addition; the cap can be exceeded silently. Enumerate every path that increments the capped value.
 - **Couple state-price reads across mutating paths.** Liquidation reads price and balance at different points in the same transaction; price moves between the reads (oracle update, swap, hook) and the liquidation pays the wrong amount.
@@ -33,19 +44,6 @@ Extract every relationship that must hold:
 ## Step 3 — Construct the exploit
 
 For every broken invariant: what initial state is needed, what calls break it, what call extracts value, who loses.
-
-## Vyper application (takes precedence over Solidity examples)
-
-- Include module-owned state, public getters, `transient` variables, and exported
-  module functions in every invariant's writer/reader map. A file-level
-  nonreentrancy pragma does not automatically cover an imported module.
-- Compare internal accounting with `self.balance` and token balances cautiously:
-  ETH can be force-fed and rebasing/fee-on-transfer tokens make external balances
-  diverge without a direct protocol call.
-- Check that `@raw_return`/proxy paths, factory children, and `raw_call` callbacks
-  cannot observe or persist a partially updated invariant.
-- A Vyper-bounded loop can still violate liveness if a user controls a `range`
-  stop that exceeds its bound or a permitted bound exceeds practical gas.
 
 ## Output fields
 

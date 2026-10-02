@@ -27,7 +27,7 @@ Vyper-specific checks:
   whether `# pragma nonreentrancy on` covers the **current file** and whether
   `@reentrant`/`reentrant(T)` opts out. Imported module files have independent
   settings.
-- Verify inline authority checks, snekmate module checks, module initialization,
+- Verify inline authority checks, Snekmate module checks, module initialization,
   and exported entry points on the actual route.
 - For `extcall`, verify a boolean transfer result is asserted. If
   `default_return_value=True` is used, verify it is an intentional no-return-token
@@ -129,7 +129,7 @@ Before final output, promote a lead when warranted:
 - **Partial-path completion:** the only weakness is an incomplete trace, but the
   route is reachable and unguarded; promote at confidence 75 with description
   and the available proof only. State the unverified link explicitly. This is
-  the v4 exception: omit the Fix block because the trace is incomplete.
+  the partial-path promotion exception: omit the Fix block because the trace is incomplete.
 
 Agreement never overrides a concrete refutation or an unknown affected compiler.
 Other promotions at 75 require a verified safe fix. If none exists, state that

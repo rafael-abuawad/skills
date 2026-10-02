@@ -6,13 +6,24 @@ Other agents cover known patterns, arithmetic, permissions, economics, invariant
 
 ## Within a transaction
 
+- Trace `extcall`, `staticcall`, `raw_call`, `send`, and `@raw_return`,
+  and every payable `__default__` as control-transfer boundaries. Treat `raw_revert` as a terminal rollback, not a callback. In particular,
+  distinguish raw-call failure tuples, truncated `max_outsize`, and ABI interface
+  results/default values.
+- Translate encoding surfaces to `abi_encode`, `_abi_decode`, `concat`, `slice`,
+  `extract32`, `method_id`, and `Bytes[N]`/`DynArray` bounds. Compiler bounds do
+  not validate protocol field order, domain, nonce, or semantic length.
+- Map version-specific execution assumptions: legacy nonreentrancy keys, file-scoped
+  nonreentrancy pragmas, module exports, `transient` state, and raw proxy return
+  propagation. A compiler-bug claim must include its affected build version.
+
 - **Parameter divergence.** Feed mismatched inputs: claimed amount ≠ actual sent amount, requested token ≠ delivered token. Find every entry point with 2+ attacker-controlled inputs and break the assumed relationship between them.
 - **Value leaks.** Trace every value-moving function from entry to final transfer. Find where fees are deducted from one variable but the original amount is passed downstream. Deposit token A, specify token B in the message, drain the contract's B balance. Forward full `msg.value` after fee subtraction.
 - **Encoding/decoding mismatches.** Exploit `concat`, `abi_encode`, `_abi_decode`, `slice`, `extract32`, and custom packed bytes with mismatched field order, type, domain, selector, or expected length.
 - **Sentinel bypass.** `empty(address)`, native-token placeholders, `max_value(uint256)`, and empty `Bytes` trigger special paths. Find where the special path skips validation the normal path enforces.
 - **Untrusted return values.** Exploit external call return values used without validation. Find where the query function differs from the function used for the actual operation.
 - **Stale reads.** Read a value, modify state or make an external call, then exploit the now-stale value.
-- **Partial state updates.** Find functions that update coupled variables but can revert or return early mid-update. Exploit the inconsistent intermediate state.
+- **Partial state updates.** Trace early successful returns, callbacks before all updates, and ignored `raw_call(..., revert_on_failure=False)` failures. A propagated revert rolls back transaction state; prove an observable callback inconsistency or an inconsistent state that survives successful completion.
 
 ## Across transactions
 
@@ -22,19 +33,6 @@ Other agents cover known patterns, arithmetic, permissions, economics, invariant
 - **Mid-operation config mutation.** Fire a setter while an operation is in-flight. Exploit the operation consuming stale or unexpected new values.
 - **Dependency swap.** Swap an external dependency while a callback from the old one is still pending.
 - **Approval residuals.** Exploit leftover allowance when approved amount exceeds consumed amount.
-
-## Vyper application (takes precedence over Solidity examples)
-
-- Trace `extcall`, `staticcall`, `raw_call`, `send`, `raw_revert`, `@raw_return`,
-  and every payable `__default__` as control-transfer boundaries. In particular,
-  distinguish raw-call failure tuples, truncated `max_outsize`, and ABI interface
-  results/default values.
-- Translate encoding surfaces to `abi_encode`, `_abi_decode`, `concat`, `slice`,
-  `extract32`, `method_id`, and `Bytes[N]`/`DynArray` bounds. Compiler bounds do
-  not validate protocol field order, domain, nonce, or semantic length.
-- Map version-specific execution assumptions: legacy nonreentrancy keys, file-scoped
-  nonreentrancy pragmas, module exports, `transient` state, and raw proxy return
-  propagation. A compiler-bug claim must include its affected build version.
 
 ## Output fields
 
