@@ -5,7 +5,7 @@ This independent Vyper skill originated as an adaptation of the upstream
 workflow.
 
 - Historical upstream workflow version: **4**
-- Independent Vyper skill version: **5**
+- Vyper skill version: **4**
 - Upstream source revision reviewed: `f6c7f0de9cce16f6aa9c57aaac104f0dee90582e`
 - Vyper stable release baseline researched: **0.4.3**
 
@@ -47,9 +47,10 @@ and [advisory index](https://github.com/vyperlang/vyper/security/advisories).
 The covered stable baseline remains 0.4.3. Preserve the advisory index's ID mapping:
 the release notes contain mismatched links for the 0.4.2 concat/slice fixes.
 
-## Independent version 5
+## V4 maintenance cleanup
 
-The local `VERSION` now tracks Vyper changes independently. Audit invocations do
+This cleanup retains local `VERSION` 4. Future Vyper releases track their own
+workflow and coverage independently. Audit invocations do
 not compare it with Solidity-auditor releases or direct users there to upgrade.
 The original branded banner is retained; exported reports use
 `{project-name}-vyper-audit-report-{stamp}.md` and contain no promotional footer.
